@@ -1,0 +1,27 @@
+# Redundant safety for Backend
+/vendor
+/node_modules
+/public/storage
+/public/hot
+/public/build
+/storage/*.key
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/storage/logs/*
+/storage/debugbar/
+/storage/pail/
+
+# Secrets
+.env
+.env.*
+!.env.example
+auth.json
+
+# IDE & OS
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+*.sqlite
