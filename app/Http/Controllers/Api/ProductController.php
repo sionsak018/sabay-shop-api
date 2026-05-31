@@ -173,6 +173,7 @@ class ProductController extends Controller
         }
 
         if ($request->hasFile('images')) {
+            \Log::info('Images detected: ' . count($request->file('images')));
             foreach ($request->file('images') as $index => $image) {
                 $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
                 if ($url) {
@@ -180,8 +181,12 @@ class ProductController extends Controller
                         'image_url' => $url,
                         'sort_order' => $index
                     ]);
+                } else {
+                    \Log::error('Cloudinary upload failed for image ' . $index);
                 }
             }
+        } else {
+            \Log::warning('No images found in request');
         }
 
         return response()->json($product->load('images'), 201);
