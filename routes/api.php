@@ -15,6 +15,38 @@ Route::get('/init-db', function() {
     \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
     return "Database Initialized Successfully!";
 });
+
+Route::get('/seed-admin', function() {
+    // 1. Run migrations first
+    \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+
+    // 2. Create Admin Account
+    $admin = \App\Models\User::updateOrCreate(
+        ['email' => 'admin@sabayshop.com'],
+        [
+            'name' => 'Administrator',
+            'password' => \Illuminate\Support\Facades\Hash::make('admin123'),
+            'role' => 'admin',
+            'phone' => '012345678',
+            'account_type' => 'store',
+            'post_limit' => 9999
+        ]
+    );
+
+    // 3. Run Category Seeder only (Fast)
+    \Illuminate\Support\Facades\Artisan::call('db:seed', [
+        '--class' => 'CategorySeeder',
+        '--force' => true
+    ]);
+
+    return response()->json([
+        'message' => 'Admin account created and categories seeded!',
+        'login_details' => [
+            'email' => 'admin@sabayshop.com',
+            'password' => 'admin123'
+        ]
+    ]);
+});
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
