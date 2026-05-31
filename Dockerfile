@@ -31,5 +31,5 @@ RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 # Expose port
 EXPOSE 8000
 
-# Start Laravel server and run migrations
-CMD php artisan migrate --force && php artisan serve --host 0.0.0.0 --port 8000
+# Start Laravel server and run migrations with seeding
+CMD php artisan migrate --force && php artisan db:seed --force && php artisan serve --host 0.0.0.0 --port 8000
