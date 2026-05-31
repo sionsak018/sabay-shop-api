@@ -4,10 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CloudinaryService;
 
 class ProfileController extends Controller
 {
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
     public function update(Request $request)
     {
         $user = $request->user();
@@ -21,17 +28,17 @@ class ProfileController extends Controller
         ]);
 
         if ($request->hasFile('avatar')) {
-            if ($user->avatar) {
-                Storage::disk('public')->delete($user->avatar);
+            $url = $this->cloudinaryService->upload($request->file('avatar'), 'sabay-shop/avatars');
+            if ($url) {
+                $validated['avatar'] = $url;
             }
-            $validated['avatar'] = $request->file('avatar')->store('avatars', 'public');
         }
 
         if ($request->hasFile('cover_photo')) {
-            if ($user->cover_photo) {
-                Storage::disk('public')->delete($user->cover_photo);
+            $url = $this->cloudinaryService->upload($request->file('cover_photo'), 'sabay-shop/covers');
+            if ($url) {
+                $validated['cover_photo'] = $url;
             }
-            $validated['cover_photo'] = $request->file('cover_photo')->store('covers', 'public');
         }
 
         $user->update($validated);

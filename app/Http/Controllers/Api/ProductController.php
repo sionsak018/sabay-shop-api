@@ -6,9 +6,17 @@ use App\Models\Product;
 use App\Models\Category;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Services\CloudinaryService;
 
 class ProductController extends Controller
 {
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
     public function index(Request $request)
     {
         $user = auth('sanctum')->user();
@@ -166,11 +174,13 @@ class ProductController extends Controller
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $image) {
-                $path = $image->store('products', 'public');
-                $product->images()->create([
-                    'image_url' => $path,
-                    'sort_order' => $index
-                ]);
+                $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
+                if ($url) {
+                    $product->images()->create([
+                        'image_url' => $url,
+                        'sort_order' => $index
+                    ]);
+                }
             }
         }
 
@@ -254,11 +264,13 @@ class ProductController extends Controller
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $image) {
-                $path = $image->store('products', 'public');
-                $product->images()->create([
-                    'image_url' => $path,
-                    'sort_order' => $product->images()->count() + $index
-                ]);
+                $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
+                if ($url) {
+                    $product->images()->create([
+                        'image_url' => $url,
+                        'sort_order' => $product->images()->count() + $index
+                    ]);
+                }
             }
         }
 
