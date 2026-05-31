@@ -10,6 +10,11 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\CategoryController;
 
 // Public routes
+Route::get('/init-db', function() {
+    \Illuminate\Support\Facades\Artisan::call('migrate:fresh', ['--force' => true]);
+    \Illuminate\Support\Facades\Artisan::call('db:seed', ['--force' => true]);
+    return "Database Initialized Successfully!";
+});
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
