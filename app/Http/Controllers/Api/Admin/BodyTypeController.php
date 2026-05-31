@@ -6,10 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\BodyType;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CloudinaryService;
 
 class BodyTypeController extends Controller
 {
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
     public function index()
     {
         return response()->json(BodyType::all());
@@ -24,8 +31,10 @@ class BodyTypeController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('body_types', 'public');
-            $validated['image_url'] = $path;
+            $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/body_types');
+            if ($url) {
+                $validated['image_url'] = $url;
+            }
         }
 
         $bodyType = BodyType::create($validated);
@@ -42,11 +51,10 @@ class BodyTypeController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            if ($bodyType->image_url) {
-                Storage::disk('public')->delete($bodyType->image_url);
+            $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/body_types');
+            if ($url) {
+                $validated['image_url'] = $url;
             }
-            $path = $request->file('image')->store('body_types', 'public');
-            $validated['image_url'] = $path;
         }
 
         $bodyType->update($validated);
@@ -56,9 +64,6 @@ class BodyTypeController extends Controller
     public function destroy($id)
     {
         $bodyType = BodyType::findOrFail($id);
-        if ($bodyType->image_url) {
-            Storage::disk('public')->delete($bodyType->image_url);
-        }
         $bodyType->delete();
         return response()->json(['message' => 'Body type deleted']);
     }

@@ -6,10 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CloudinaryService;
 
 class CategoryController extends Controller
 {
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
     public function index(Request $request)
     {
         $query = Category::query();
@@ -37,8 +44,10 @@ class CategoryController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('categories', 'public');
-            $validated['image_url'] = $path;
+            $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/categories');
+            if ($url) {
+                $validated['image_url'] = $url;
+            }
         }
 
         $category = Category::create($validated);
@@ -67,12 +76,10 @@ class CategoryController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            // Delete old image if exists
-            if ($category->image_url) {
-                Storage::disk('public')->delete($category->image_url);
+            $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/categories');
+            if ($url) {
+                $validated['image_url'] = $url;
             }
-            $path = $request->file('image')->store('categories', 'public');
-            $validated['image_url'] = $path;
         }
 
         $category->update($validated);
@@ -82,9 +89,6 @@ class CategoryController extends Controller
     public function destroy($id)
     {
         $category = Category::findOrFail($id);
-        if ($category->image_url) {
-            Storage::disk('public')->delete($category->image_url);
-        }
         $category->delete();
         return response()->json(['message' => 'Category deleted']);
     }

@@ -6,10 +6,17 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Message;
 use App\Models\MessageReaction;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CloudinaryService;
 
 class MessageController extends Controller
 {
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
     public function index(Request $request)
     {
         // Get all conversations for the logged-in user
@@ -35,8 +42,11 @@ class MessageController extends Controller
         $filePath = null;
 
         if ($request->hasFile('file')) {
-            $folder = $type === 'image' ? 'messages/images' : ($type === 'audio' ? 'messages/voice' : 'messages/files');
-            $filePath = $request->file('file')->store($folder, 'public');
+            $folder = $type === 'image' ? 'sabay-shop/messages/images' : ($type === 'audio' ? 'sabay-shop/messages/voice' : 'sabay-shop/messages/files');
+            $url = $this->cloudinaryService->upload($request->file('file'), $folder);
+            if ($url) {
+                $filePath = $url;
+            }
         }
 
         $message = Message::create([
@@ -78,19 +88,14 @@ class MessageController extends Controller
     public function destroy($id, Request $request)
     {
         $message = Message::where('from_user_id', $request->user()->id)->findOrFail($id);
-
-        if ($message->file_path) {
-            Storage::disk('public')->delete($message->file_path);
-        }
-
         $message->delete();
         return response()->json(['message' => 'Message deleted']);
     }
 
-public function markAsRead(int $id, Request $request)
-{
-    $message = Message::where('to_user_id', $request->user()->id)->findOrFail($id);
-    $message->update(['is_read' => true]);
-    return response()->json(['message' => 'Marked as read']);
-}
+    public function markAsRead(int $id, Request $request)
+    {
+        $message = Message::where('to_user_id', $request->user()->id)->findOrFail($id);
+        $message->update(['is_read' => true]);
+        return response()->json(['message' => 'Marked as read']);
+    }
 }

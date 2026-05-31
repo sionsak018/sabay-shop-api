@@ -6,10 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CloudinaryService;
 
 class BrandController extends Controller
 {
+    protected $cloudinaryService;
+
+    public function __construct(CloudinaryService $cloudinaryService)
+    {
+        $this->cloudinaryService = $cloudinaryService;
+    }
+
     public function index()
     {
         return response()->json(Brand::with('category')->get());
@@ -25,8 +32,10 @@ class BrandController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('brands', 'public');
-            $validated['image_url'] = $path;
+            $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/brands');
+            if ($url) {
+                $validated['image_url'] = $url;
+            }
         }
 
         $brand = Brand::create($validated);
@@ -44,11 +53,10 @@ class BrandController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            if ($brand->image_url) {
-                Storage::disk('public')->delete($brand->image_url);
+            $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/brands');
+            if ($url) {
+                $validated['image_url'] = $url;
             }
-            $path = $request->file('image')->store('brands', 'public');
-            $validated['image_url'] = $path;
         }
 
         $brand->update($validated);
@@ -58,9 +66,6 @@ class BrandController extends Controller
     public function destroy($id)
     {
         $brand = Brand::findOrFail($id);
-        if ($brand->image_url) {
-            Storage::disk('public')->delete($brand->image_url);
-        }
         $brand->delete();
         return response()->json(['message' => 'Brand deleted']);
     }
