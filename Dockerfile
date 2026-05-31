@@ -1,5 +1,5 @@
-FROM php:8.3-cli-alpine
-# Trigger new deployment
+FROM php:8.4-cli-alpine
+# Trigger new deployment with PHP 8.4
 
 # Install system dependencies
 RUN apk add --no-cache \
