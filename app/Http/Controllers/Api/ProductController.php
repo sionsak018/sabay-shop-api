@@ -172,21 +172,27 @@ class ProductController extends Controller
             }
         }
 
+        // Improved Image Handling
+        $imageFiles = $request->file('images');
         if ($request->hasFile('images')) {
-            \Log::info('Images detected: ' . count($request->file('images')));
-            foreach ($request->file('images') as $index => $image) {
+            \Log::info('Images count: ' . (is_array($imageFiles) ? count($imageFiles) : '1'));
+
+            $files = is_array($imageFiles) ? $imageFiles : [$imageFiles];
+
+            foreach ($files as $index => $image) {
                 $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
                 if ($url) {
                     $product->images()->create([
                         'image_url' => $url,
                         'sort_order' => $index
                     ]);
+                    \Log::info('Image uploaded: ' . $url);
                 } else {
-                    \Log::error('Cloudinary upload failed for image ' . $index);
+                    \Log::error('Cloudinary upload returned null');
                 }
             }
         } else {
-            \Log::warning('No images found in request');
+            \Log::warning('Request files: ' . json_encode($request->allFiles()));
         }
 
         return response()->json($product->load('images'), 201);
