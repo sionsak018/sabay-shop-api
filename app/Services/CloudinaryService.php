@@ -30,10 +30,14 @@ class CloudinaryService
     public function upload(UploadedFile $file, string $folder = 'sabay-shop')
     {
         try {
-            $upload = $this->cloudinary->uploadApi()->upload($file->getRealPath(), [
+            $path = $file->getRealPath();
+            \Log::info("Attempting Cloudinary upload from path: $path to folder: $folder");
+
+            $upload = $this->cloudinary->uploadApi()->upload($path, [
                 'folder' => $folder,
             ]);
 
+            \Log::info("Cloudinary upload success: " . $upload['secure_url']);
             return $upload['secure_url'];
         } catch (\Exception $e) {
             \Log::error('Cloudinary upload failed: ' . $e->getMessage());

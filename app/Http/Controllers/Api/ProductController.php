@@ -172,20 +172,29 @@ class ProductController extends Controller
             }
         }
 
+        // Debugging logs to see what's coming in
+        \Log::info('All Files:', $request->allFiles());
+
         // Robust Image Handling for Array or Single file
         if ($request->hasFile('images')) {
             $imageFiles = $request->file('images');
             $files = is_array($imageFiles) ? $imageFiles : [$imageFiles];
 
             foreach ($files as $index => $image) {
-                if ($image->isValid()) {
+                if ($image && $image->isValid()) {
+                    \Log::info('Uploading image to Cloudinary: ' . $image->getClientOriginalName());
                     $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
                     if ($url) {
                         $product->images()->create([
                             'image_url' => $url,
                             'sort_order' => $product->images()->count() + $index
                         ]);
+                        \Log::info('Successfully saved image URL: ' . $url);
+                    } else {
+                        \Log::error('Cloudinary upload failed (returned null)');
                     }
+                } else {
+                    \Log::error('Invalid image file detected at index ' . $index);
                 }
             }
         }
@@ -269,13 +278,18 @@ class ProductController extends Controller
         }
 
         if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $index => $image) {
-                $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
-                if ($url) {
-                    $product->images()->create([
-                        'image_url' => $url,
-                        'sort_order' => $product->images()->count() + $index
-                    ]);
+            $imageFiles = $request->file('images');
+            $files = is_array($imageFiles) ? $imageFiles : [$imageFiles];
+
+            foreach ($files as $index => $image) {
+                if ($image && $image->isValid()) {
+                    $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
+                    if ($url) {
+                        $product->images()->create([
+                            'image_url' => $url,
+                            'sort_order' => $product->images()->count() + $index
+                        ]);
+                    }
                 }
             }
         }
