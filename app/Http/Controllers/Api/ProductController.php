@@ -55,15 +55,6 @@ class ProductController extends Controller
         if ($request->filled('district_id')) {
             $query->where('district_id', $request->district_id);
         }
-        if ($request->filled('brand_id')) {
-            $query->where('brand_id', $request->brand_id);
-        }
-        if ($request->filled('brand_model_id')) {
-            $query->where('brand_model_id', $request->brand_model_id);
-        }
-        if ($request->filled('condition')) {
-            $query->where('condition', $request->condition);
-        }
         if ($request->filled('location') && !$request->filled('province_id')) {
             $query->where('location', 'like', '%'.$request->location.'%');
         }
