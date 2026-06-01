@@ -6,9 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Attribute;
 use App\Models\AttributeOption;
 use Illuminate\Http\Request;
+use App\Services\CloudinaryService;
 
 class AttributeController extends Controller
 {
+    protected $cloudinary;
+
+    public function __construct(CloudinaryService $cloudinary)
+    {
+        $this->cloudinary = $cloudinary;
+    }
+
     public function index()
     {
         return response()->json(Attribute::with('options')->get());
@@ -19,14 +27,31 @@ class AttributeController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:text,number,select',
-            'options' => 'nullable|array', // Array of strings for select type
+            'options' => 'nullable|array',
         ]);
 
         $attribute = Attribute::create($request->only(['name', 'type']));
 
         if ($request->type === 'select' && !empty($request->options)) {
-            foreach ($request->options as $optionValue) {
-                $attribute->options()->create(['value' => $optionValue]);
+            foreach ($request->options as $index => $optionData) {
+                // If it's a string (old format or simple text)
+                if (is_string($optionData)) {
+                    $attribute->options()->create(['value' => $optionData]);
+                    continue;
+                }
+
+                $value = $optionData['value'] ?? '';
+                $imageUrl = null;
+
+                // Handle image upload from FormData
+                if ($request->hasFile("option_images.$index")) {
+                    $imageUrl = $this->cloudinary->upload($request->file("option_images.$index"), 'sabay-shop/attributes');
+                }
+
+                $attribute->options()->create([
+                    'value' => $value,
+                    'image_url' => $imageUrl
+                ]);
             }
         }
 
@@ -39,9 +64,28 @@ class AttributeController extends Controller
         $attribute->update($request->only(['name', 'type']));
 
         if ($request->type === 'select' && $request->has('options')) {
+            // Collect existing options to decide which to keep/update or delete
+            // For simplicity in this specialized flow, we'll re-sync
             $attribute->options()->delete();
-            foreach ($request->options as $optionValue) {
-                $attribute->options()->create(['value' => $optionValue]);
+
+            foreach ($request->options as $index => $optionData) {
+                if (is_string($optionData)) {
+                    $attribute->options()->create(['value' => $optionData]);
+                    continue;
+                }
+
+                $value = $optionData['value'] ?? '';
+                $imageUrl = $optionData['image_url'] ?? null;
+
+                // If a new file is uploaded for this index
+                if ($request->hasFile("option_images.$index")) {
+                    $imageUrl = $this->cloudinary->upload($request->file("option_images.$index"), 'sabay-shop/attributes');
+                }
+
+                $attribute->options()->create([
+                    'value' => $value,
+                    'image_url' => $imageUrl
+                ]);
             }
         }
 

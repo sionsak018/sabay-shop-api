@@ -9,7 +9,7 @@ class AttributeOption extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['attribute_id', 'value'];
+    protected $fillable = ['attribute_id', 'value', 'image_url'];
 
     public function attribute()
     {
