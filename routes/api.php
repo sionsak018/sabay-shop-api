@@ -17,6 +17,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/sliders', [\App\Http\Controllers\Api\Admin\SliderController::class, 'getActive']);
 Route::get('/profile/{id}', [\App\Http\Controllers\Api\ProfileController::class, 'show']);
 Route::get('/category-attributes/{categoryId}', [\App\Http\Controllers\Api\Admin\CategoryAttributeController::class, 'index']);
 Route::get('/brands', [\App\Http\Controllers\Api\Admin\BrandController::class, 'index']);
@@ -79,6 +80,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::apiResource('districts', \App\Http\Controllers\Api\Admin\DistrictController::class);
     Route::apiResource('communes', \App\Http\Controllers\Api\Admin\CommuneController::class);
     Route::apiResource('villages', \App\Http\Controllers\Api\Admin\VillageController::class);
+    Route::apiResource('sliders', \App\Http\Controllers\Api\Admin\SliderController::class);
 
     Route::get('/category-attributes/{categoryId}', [\App\Http\Controllers\Api\Admin\CategoryAttributeController::class, 'index']);
     Route::post('/category-attributes/{categoryId}', [\App\Http\Controllers\Api\Admin\CategoryAttributeController::class, 'sync']);
