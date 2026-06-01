@@ -176,26 +176,15 @@ class ProductController extends Controller
 
         // --- Robust Image Handling ---
         $allFiles = $request->allFiles();
-        Log::info('Product store - total files received: ' . count($allFiles));
 
-        // Laravel might see 'images' or 'images[]'
+        // Laravel handles 'images' key from FormData
         $imageFiles = $request->file('images');
-        if (!$imageFiles) {
-            // Fallback: check all keys that might look like images
-            foreach ($allFiles as $key => $file) {
-                if (str_contains($key, 'image')) {
-                    $imageFiles = $file;
-                    break;
-                }
-            }
-        }
 
         if ($imageFiles) {
             $files = is_array($imageFiles) ? $imageFiles : [$imageFiles];
-            Log::info('Processing ' . count($files) . ' images');
+            \Log::info('Processing ' . count($files) . ' images.');
 
             foreach ($files as $index => $image) {
-                // Remove isValid check to ensure we try everything
                 try {
                     $url = $this->cloudinaryService->upload($image, 'sabay-shop/products');
                     if ($url) {
@@ -203,16 +192,13 @@ class ProductController extends Controller
                             'image_url' => $url,
                             'sort_order' => $index
                         ]);
-                        Log::info('Image ' . $index . ' uploaded successfully: ' . $url);
-                    } else {
-                        Log::error('Image ' . $index . ' failed to upload to Cloudinary');
                     }
                 } catch (\Exception $e) {
-                    Log::error('Exception during image upload: ' . $e->getMessage());
+                    \Log::error('Upload failed: ' . $e->getMessage());
                 }
             }
         } else {
-            Log::warning('No images found in the request. Available keys: ' . implode(', ', array_keys($allFiles)));
+            \Log::warning('No images found in request. Keys: ' . implode(', ', array_keys($allFiles)));
         }
 
         return response()->json($product->load('images'), 201);
