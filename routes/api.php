@@ -47,6 +47,14 @@ Route::get('/seed-admin', function() {
         ]
     ]);
 });
+
+Route::get('/test-cloudinary', function() {
+    return response()->json([
+        'cloud_name' => config('cloudinary.cloud_name'),
+        'api_key' => config('cloudinary.api_key'),
+        'api_secret_status' => config('cloudinary.api_secret') ? 'SET' : 'MISSING',
+    ]);
+});
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
