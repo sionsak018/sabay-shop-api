@@ -78,10 +78,13 @@ class CategoryController extends Controller
         if ($request->hasFile('image')) {
             $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/categories');
             if ($url) {
-                $validated['image_url'] = $url;
+                $category->image_url = $url;
             }
+        } elseif ($request->boolean('remove_image')) {
+            $category->image_url = null;
         }
 
+        $category->save();
         $category->update($validated);
         return response()->json($category);
     }
