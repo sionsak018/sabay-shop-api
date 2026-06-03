@@ -80,7 +80,7 @@ class CloudinaryService
                 $startIndex = $versionIndex + 1;
             } else {
                 $startIndex = $versionIndex;
-            }fdf
+            }
 
             // Join the remaining segments and remove extension
             $publicIdWithExt = implode('/', array_slice($segments, $startIndex));
