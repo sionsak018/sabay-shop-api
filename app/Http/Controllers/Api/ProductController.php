@@ -242,7 +242,22 @@ class ProductController extends Controller
             'company_name' => 'nullable|string',
         ]);
 
-        $product->update($request->except(['images', 'attributes']));
+        $product->update($request->except(['images', 'attributes', 'deleted_image_ids']));
+
+        // Handle image deletions
+        $deletedImageIds = $request->input('deleted_image_ids');
+        if ($deletedImageIds) {
+            $ids = is_string($deletedImageIds) ? json_decode($deletedImageIds, true) : $deletedImageIds;
+            if (is_array($ids)) {
+                \Log::info('Deleting images: ' . implode(', ', $ids));
+                $imagesToDelete = $product->images()->whereIn('id', $ids)->get();
+                foreach ($imagesToDelete as $image) {
+                    // This triggers the deleting hook in ProductImage model
+                    // which handles Cloudinary deletion
+                    $image->delete();
+                }
+            }
+        }
 
         $attributesData = $request->input('attributes');
         if ($attributesData) {
@@ -339,6 +354,7 @@ class ProductController extends Controller
     public function destroy(Request $request, $id)
     {
         $product = $request->user()->products()->findOrFail($id);
+        // The deleting hook in Product model handles image deletion from DB and Cloudinary
         $product->delete();
         return response()->json(['message' => 'Product deleted successfully']);
     }

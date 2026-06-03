@@ -11,6 +11,17 @@ class AttributeOption extends Model
 
     protected $fillable = ['attribute_id', 'value', 'image_url'];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($option) {
+            if ($option->image_url) {
+                app(\App\Services\CloudinaryService::class)->delete($option->image_url);
+            }
+        });
+    }
+
     public function attribute()
     {
         return $this->belongsTo(Attribute::class);

@@ -64,9 +64,14 @@ class AttributeController extends Controller
         $attribute->update($request->only(['name', 'type']));
 
         if ($request->type === 'select' && $request->has('options')) {
-            // Collect existing options to decide which to keep/update or delete
-            // For simplicity in this specialized flow, we'll re-sync
-            $attribute->options()->delete();
+            // Re-sync options: loop and delete individually to trigger model hooks (Cloudinary cleanup)
+            foreach ($attribute->options as $oldOption) {
+                $optionDataMatching = collect($request->options)->first(fn($o) => is_array($o) && isset($o['value']) && $o['value'] === $oldOption->value);
+
+                // If it's a completely new set or specialized flow, we often just clear and rebuild.
+                // To keep it simple but safe for Cloudinary, we delete one by one.
+                $oldOption->delete();
+            }
 
             foreach ($request->options as $index => $optionData) {
                 if (is_string($optionData)) {

@@ -28,6 +28,9 @@ class ProfileController extends Controller
         ]);
 
         if ($request->hasFile('avatar')) {
+            if ($user->avatar) {
+                $this->cloudinaryService->delete($user->avatar);
+            }
             $url = $this->cloudinaryService->upload($request->file('avatar'), 'sabay-shop/avatars');
             if ($url) {
                 $validated['avatar'] = $url;
@@ -35,6 +38,9 @@ class ProfileController extends Controller
         }
 
         if ($request->hasFile('cover_photo')) {
+            if ($user->cover_photo) {
+                $this->cloudinaryService->delete($user->cover_photo);
+            }
             $url = $this->cloudinaryService->upload($request->file('cover_photo'), 'sabay-shop/covers');
             if ($url) {
                 $validated['cover_photo'] = $url;

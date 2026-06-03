@@ -11,6 +11,17 @@ class Attribute extends Model
 
     protected $fillable = ['name', 'type'];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($attribute) {
+            foreach ($attribute->options as $option) {
+                $option->delete(); // Triggers AttributeOption model hook for Cloudinary
+            }
+        });
+    }
+
     public function options()
     {
         return $this->hasMany(AttributeOption::class);

@@ -51,9 +51,12 @@ class BodyTypeController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
+            if ($bodyType->image_url) {
+                $this->cloudinaryService->delete($bodyType->image_url);
+            }
             $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/body_types');
             if ($url) {
-                $validated['image_url'] = $url;
+                $bodyType->image_url = $url;
             }
         }
 

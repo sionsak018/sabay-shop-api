@@ -11,6 +11,17 @@ class Brand extends Model
 
     protected $fillable = ['name', 'slug', 'image_url', 'category_id'];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($brand) {
+            if ($brand->image_url) {
+                app(\App\Services\CloudinaryService::class)->delete($brand->image_url);
+            }
+        });
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class);

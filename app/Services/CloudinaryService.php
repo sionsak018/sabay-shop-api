@@ -47,10 +47,59 @@ class CloudinaryService
 
     /**
      * Delete an image from Cloudinary using its URL.
-     * Note: This is optional and requires the public_id.
      */
-    public function delete(string $url)
+    public function delete(?string $url)
     {
-        // Extraction of public_id from URL can be complex, skipping for now unless needed.
+        if (!$url) {
+            return false;
+        }
+
+        try {
+            // Extract the public_id from the URL
+            // Format: https://res.cloudinary.com/{cloud_name}/image/upload/{version}/{folder}/{subfolder}/{public_id}.{ext}
+
+            // 1. Remove the domain part and the version part
+            // We want everything after 'upload/' or 'v[0-9]+/'
+
+            $path = parse_url($url, PHP_URL_PATH);
+            if (!$path) return false;
+
+            // Path usually starts with /cloud_name/image/upload/v12345/folder/public_id.jpg
+            $segments = explode('/', ltrim($path, '/'));
+
+            // Find 'upload' segment
+            $uploadIndex = array_search('upload', $segments);
+            if ($uploadIndex === false) {
+                \Log::warning("Cloudinary delete: 'upload' segment not found in URL: $url");
+                return false;
+            }
+
+            // The segments after 'upload' starting with 'v' followed by digits is the version
+            $versionIndex = $uploadIndex + 1;
+            if (isset($segments[$versionIndex]) && preg_match('/^v[0-9]+$/', $segments[$versionIndex])) {
+                $startIndex = $versionIndex + 1;
+            } else {
+                $startIndex = $versionIndex;
+            }fdf
+
+            // Join the remaining segments and remove extension
+            $publicIdWithExt = implode('/', array_slice($segments, $startIndex));
+            $publicId = preg_replace('/\.[^.]+$/', '', $publicIdWithExt);
+
+            \Log::info("Cloudinary attempt delete public_id: " . $publicId);
+
+            $result = $this->cloudinary->uploadApi()->destroy($publicId);
+
+            if (isset($result['result']) && $result['result'] === 'ok') {
+                \Log::info("Cloudinary delete success for: " . $publicId);
+                return true;
+            } else {
+                \Log::warning("Cloudinary delete result not 'ok': " . json_encode($result));
+                return false;
+            }
+        } catch (\Exception $e) {
+            \Log::error('Cloudinary deletion failed: ' . $e->getMessage());
+            return false;
+        }
     }
 }

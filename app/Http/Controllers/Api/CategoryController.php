@@ -76,11 +76,17 @@ class CategoryController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
+            if ($category->image_url) {
+                $this->cloudinaryService->delete($category->image_url);
+            }
             $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/categories');
             if ($url) {
                 $category->image_url = $url;
             }
         } elseif ($request->boolean('remove_image')) {
+            if ($category->image_url) {
+                $this->cloudinaryService->delete($category->image_url);
+            }
             $category->image_url = null;
         }
 

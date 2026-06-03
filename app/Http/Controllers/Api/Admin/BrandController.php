@@ -53,9 +53,12 @@ class BrandController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
+            if ($brand->image_url) {
+                $this->cloudinaryService->delete($brand->image_url);
+            }
             $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/brands');
             if ($url) {
-                $validated['image_url'] = $url;
+                $brand->image_url = $url;
             }
         }
 

@@ -37,6 +37,17 @@ class Product extends Model
         'discount_price' => 'decimal:2',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($product) {
+            foreach ($product->images as $image) {
+                $image->delete(); // This will trigger ProductImage's deleting hook
+            }
+        });
+    }
+
     public function seller()
     {
         return $this->belongsTo(User::class, 'seller_id');

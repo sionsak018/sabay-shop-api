@@ -8,6 +8,17 @@ class Category extends Model
 {
     protected $fillable = ['name', 'slug', 'image_url', 'parent_id'];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($category) {
+            if ($category->image_url) {
+                app(\App\Services\CloudinaryService::class)->delete($category->image_url);
+            }
+        });
+    }
+
     public function products()
     {
         return $this->hasMany(Product::class);

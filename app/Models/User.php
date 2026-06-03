@@ -29,6 +29,26 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($user) {
+            $cloudinary = app(\App\Services\CloudinaryService::class);
+            if ($user->avatar) {
+                $cloudinary->delete($user->avatar);
+            }
+            if ($user->cover_photo) {
+                $cloudinary->delete($user->cover_photo);
+            }
+
+            // Delete user products (this will trigger product hooks for their images)
+            foreach ($user->products as $product) {
+                $product->delete();
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [
