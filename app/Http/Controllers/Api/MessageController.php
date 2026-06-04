@@ -88,6 +88,12 @@ class MessageController extends Controller
     public function destroy($id, Request $request)
     {
         $message = Message::where('from_user_id', $request->user()->id)->findOrFail($id);
+
+        // Delete file from Cloudinary if exists
+        if ($message->file_path) {
+            $this->cloudinaryService->delete($message->file_path);
+        }
+
         $message->delete();
         return response()->json(['message' => 'Message deleted']);
     }

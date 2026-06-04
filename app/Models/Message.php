@@ -16,6 +16,17 @@ class Message extends Model
         'is_read',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function ($message) {
+            if ($message->file_path) {
+                app(\App\Services\CloudinaryService::class)->delete($message->file_path);
+            }
+        });
+    }
+
     public function reactions()
     {
         return $this->hasMany(MessageReaction::class);
