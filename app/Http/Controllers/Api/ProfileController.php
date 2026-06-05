@@ -25,7 +25,25 @@ class ProfileController extends Controller
             'about_me' => 'sometimes|nullable|string',
             'avatar' => 'sometimes|nullable|image|max:2048',
             'cover_photo' => 'sometimes|nullable|image|max:2048',
+            'province_id' => 'sometimes|nullable|exists:provinces,id',
+            'district_id' => 'sometimes|nullable|exists:districts,id',
+            'commune_id' => 'sometimes|nullable|exists:communes,id',
+            'village_id' => 'sometimes|nullable|exists:villages,id',
         ]);
+
+        if ($request->has('remove_avatar') && $request->remove_avatar == '1') {
+            if ($user->avatar) {
+                $this->cloudinaryService->delete($user->avatar);
+                $validated['avatar'] = null;
+            }
+        }
+
+        if ($request->has('remove_cover_photo') && $request->remove_cover_photo == '1') {
+            if ($user->cover_photo) {
+                $this->cloudinaryService->delete($user->cover_photo);
+                $validated['cover_photo'] = null;
+            }
+        }
 
         if ($request->hasFile('avatar')) {
             if ($user->avatar) {
@@ -49,7 +67,7 @@ class ProfileController extends Controller
 
         $user->update($validated);
 
-        return response()->json($user);
+        return response()->json($user->load(['province', 'district', 'commune', 'village']));
     }
 
     public function show($id)

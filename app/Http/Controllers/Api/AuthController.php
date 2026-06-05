@@ -52,6 +52,6 @@ public function logout(Request $request)
 
 public function profile(Request $request)
 {
-    return response()->json($request->user());
+    return response()->json($request->user()->load(['province', 'district', 'commune', 'village']));
 }
 }

@@ -21,7 +21,11 @@ class User extends Authenticatable
         'role',
         'account_type',
         'post_limit',
-        'about_me'
+        'about_me',
+        'province_id',
+        'district_id',
+        'commune_id',
+        'village_id',
     ];
 
     protected $hidden = [
@@ -80,5 +84,25 @@ class User extends Authenticatable
     public function following()
     {
         return $this->belongsToMany(User::class, 'follows', 'follower_id', 'following_id');
+    }
+
+    public function province()
+    {
+        return $this->belongsTo(Province::class);
+    }
+
+    public function district()
+    {
+        return $this->belongsTo(District::class);
+    }
+
+    public function commune()
+    {
+        return $this->belongsTo(Commune::class);
+    }
+
+    public function village()
+    {
+        return $this->belongsTo(Village::class);
     }
 }
