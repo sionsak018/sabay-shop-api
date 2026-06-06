@@ -72,7 +72,7 @@ class ProfileController extends Controller
 
     public function show($id)
     {
-        $user = \App\Models\User::findOrFail($id);
+        $user = \App\Models\User::with(['province', 'district', 'commune', 'village'])->findOrFail($id);
         $me = auth('sanctum')->user();
 
         return response()->json([
@@ -83,6 +83,10 @@ class ProfileController extends Controller
                 'cover_photo' => $user->cover_photo,
                 'about_me' => $user->about_me,
                 'phone' => $user->phone,
+                'province' => $user->province,
+                'district' => $user->district,
+                'commune' => $user->commune,
+                'village' => $user->village,
                 'created_at' => $user->created_at,
             ],
             'stats' => [
