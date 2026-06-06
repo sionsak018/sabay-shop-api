@@ -52,6 +52,14 @@ public function logout(Request $request)
 
 public function profile(Request $request)
 {
-    return response()->json($request->user()->load(['province', 'district', 'commune', 'village']));
+    $user = $request->user()->load(['province', 'district', 'commune', 'village']);
+
+    // Convert to array and add stats explicitly to ensure they are in the JSON
+    $userData = $user->toArray();
+    $userData['ads_count'] = $user->products()->where('status', 'active')->count();
+    $userData['followers_count'] = $user->followers()->count();
+    $userData['following_count'] = $user->following()->count();
+
+    return response()->json($userData);
 }
 }

@@ -55,6 +55,13 @@ class ProductController extends Controller
         if ($request->filled('district_id')) {
             $query->where('district_id', $request->district_id);
         }
+
+        // Filter by user/seller
+        $targetUserId = $request->input('user_id') ?? $request->input('seller_id');
+        if ($targetUserId) {
+            $query->where('seller_id', $targetUserId);
+        }
+
         if ($request->filled('location') && !$request->filled('province_id')) {
             $query->where('location', 'like', '%'.$request->location.'%');
         }
