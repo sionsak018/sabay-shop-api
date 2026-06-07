@@ -21,7 +21,12 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $user = auth('sanctum')->user();
-        $query = Product::with(['seller', 'category', 'images', 'province', 'commune'])->where('status', 'active');
+        $query = Product::with(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']);
+
+        // Only filter by active if NOT filtering by a specific user/seller
+        if (!$request->filled('user_id') && !$request->filled('seller_id')) {
+            $query->where('status', 'active');
+        }
 
         if ($user) {
             $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
@@ -159,8 +164,8 @@ class ProductController extends Controller
                 foreach ($attrs as $attrId => $value) {
                     if ($value !== null && $value !== '') {
                         $product->attributeValues()->create([
-                            'attribute_id' => $attrId,
-                            'value' => is_array($value) ? json_encode($value) : $value
+                            'attribute_id' => (int)$attrId,
+                            'value' => is_array($value) ? json_encode($value) : (string)$value
                         ]);
 
                         // Auto-sync "Discount Price" attribute
@@ -271,33 +276,32 @@ class ProductController extends Controller
             $product->attributeValues()->delete();
             $product->discount_price = null;
 
+            // Handle both JSON string and array
             $attrs = is_string($attributesData) ? json_decode($attributesData, true) : $attributesData;
+
             if (is_array($attrs)) {
-                $attributeModels = \App\Models\Attribute::whereIn('id', array_keys($attrs))->get();
                 foreach ($attrs as $attrId => $value) {
                     if ($value !== null && $value !== '') {
                         $product->attributeValues()->create([
-                            'attribute_id' => $attrId,
-                            'value' => is_array($value) ? json_encode($value) : $value
+                            'attribute_id' => (int)$attrId,
+                            'value' => (string)$value
                         ]);
 
                         // Auto-sync "Discount Price" attribute
-                        $attrModel = $attributeModels->find($attrId);
+                        $attrModel = \App\Models\Attribute::find($attrId);
                         if ($attrModel) {
                             $name = strtolower(str_replace(' ', '', $attrModel->name));
                             if ($name === 'discountprice' || $name === 'discount') {
                                 if (is_numeric($value) && $value > 0) {
                                     $product->discount_price = $value;
-                                } else {
-                                    $product->discount_price = null;
                                 }
                             }
                         }
                     }
                 }
-                $product->save();
             }
         }
+        $product->save();
 
         if ($request->hasFile('images')) {
             $imageFiles = $request->file('images');
@@ -317,7 +321,7 @@ class ProductController extends Controller
             }
         }
 
-        return response()->json($product->load('images'));
+        return response()->json($product->load(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']));
     }
 
     public function show($id)
@@ -348,7 +352,7 @@ class ProductController extends Controller
     {
         $user = $request->user();
         $products = $user->products()
-            ->with(['category', 'images', 'province', 'commune'])
+            ->with(['category', 'images', 'province', 'commune', 'attributeValues.attribute'])
             ->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
                 $q->where('user_id', $user->id);
             }])
