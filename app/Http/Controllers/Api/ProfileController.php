@@ -29,7 +29,17 @@ class ProfileController extends Controller
             'district_id' => 'sometimes|nullable|exists:districts,id',
             'commune_id' => 'sometimes|nullable|exists:communes,id',
             'village_id' => 'sometimes|nullable|exists:villages,id',
+            'current_password' => 'sometimes|required_with:password|current_password',
+            'password' => 'sometimes|nullable|string|min:8|confirmed',
         ]);
+
+        if ($request->has('password') && $request->password != null) {
+            $validated['password'] = \Illuminate\Support\Facades\Hash::make($request->password);
+        } else {
+            unset($validated['password']);
+        }
+        unset($validated['current_password']);
+        unset($validated['password_confirmation']);
 
         if ($request->has('remove_avatar') && $request->remove_avatar == '1') {
             if ($user->avatar) {
