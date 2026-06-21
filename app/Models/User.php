@@ -33,7 +33,20 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    protected $appends = ['ads_count', 'followers_count', 'following_count'];
+    protected $appends = ['ads_count', 'followers_count', 'following_count', 'permissions'];
+
+    public function getPermissionsAttribute()
+    {
+        if ($this->relationLoaded('roles')) {
+            return $this->roles->flatMap(function ($role) {
+                return $role->relationLoaded('permissions')
+                    ? $role->permissions->pluck('name')
+                    : $role->permissions()->pluck('name');
+            })->unique()->values();
+        }
+
+        return [];
+    }
 
     public function getAdsCountAttribute()
     {
@@ -81,6 +94,44 @@ class User extends Authenticatable
     public function products()
     {
         return $this->hasMany(Product::class, 'seller_id');
+    }
+
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    public function hasRole($role)
+    {
+        if (is_string($role)) {
+            return $this->roles->contains('name', $role);
+        }
+        return !! $role->intersect($this->roles)->count();
+    }
+
+    public function hasPermission($permission)
+    {
+        // We removed the 'admin' bypass here so checkboxes are strictly followed.
+        // If you want a user to see everything, ensure they have a role with all permissions.
+
+        if ($this->relationLoaded('roles')) {
+            foreach ($this->roles as $role) {
+                if ($role->relationLoaded('permissions')) {
+                    if ($role->permissions->contains('name', $permission)) {
+                        return true;
+                    }
+                } else {
+                    if ($role->permissions()->where('name', $permission)->exists()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        return $this->roles()->whereHas('permissions', function($query) use ($permission) {
+            $query->where('name', $permission);
+        })->exists();
     }
 
     public function cart()

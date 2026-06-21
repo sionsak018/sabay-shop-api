@@ -23,7 +23,7 @@ class AuthController extends Controller
     $token = $user->createToken('auth_token')->plainTextToken;
 
     return response()->json([
-        'user' => $user,
+        'user' => $user->load('roles.permissions'),
         'token' => $token
     ], 201);
 }
@@ -39,7 +39,7 @@ public function login(LoginRequest $request)
     $token = $user->createToken('auth_token')->plainTextToken;
 
     return response()->json([
-        'user' => $user,
+        'user' => $user->load('roles.permissions'),
         'token' => $token
     ]);
 }
@@ -52,7 +52,7 @@ public function logout(Request $request)
 
 public function profile(Request $request)
 {
-    $user = $request->user()->load(['province', 'district', 'commune', 'village']);
+    $user = $request->user()->load(['province', 'district', 'commune', 'village', 'roles.permissions']);
 
     // Convert to array and add stats explicitly to ensure they are in the JSON
     $userData = $user->toArray();

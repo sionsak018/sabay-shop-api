@@ -68,9 +68,17 @@ Route::middleware('auth:sanctum')->group(function () {
 // Admin Routes
 Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Api\Admin\AdminDashboardController::class, 'index']);
-    Route::apiResource('users', \App\Http\Controllers\Api\Admin\UserController::class);
-    Route::apiResource('categories', \App\Http\Controllers\Api\CategoryController::class)->except(['index']);
-    Route::apiResource('products', \App\Http\Controllers\Api\Admin\AdminProductController::class)->only(['index', 'update', 'destroy']);
+
+    // User & Role Management
+    Route::apiResource('users', \App\Http\Controllers\Api\Admin\UserController::class)->middleware('permission:view_users');
+    Route::apiResource('roles', \App\Http\Controllers\Api\Admin\RoleController::class)->middleware('permission:manage_roles');
+    Route::apiResource('permissions', \App\Http\Controllers\Api\Admin\PermissionController::class)->middleware('permission:manage_roles');
+
+    // Product Management
+    Route::apiResource('products', \App\Http\Controllers\Api\Admin\AdminProductController::class)->only(['index', 'update', 'destroy'])->middleware('permission:view_products');
+    Route::apiResource('categories', \App\Http\Controllers\Api\CategoryController::class)->except(['index'])->middleware('permission:manage_categories');
+
+    // Settings & Master Data
     Route::apiResource('brands', \App\Http\Controllers\Api\Admin\BrandController::class);
     Route::apiResource('brand-models', \App\Http\Controllers\Api\Admin\BrandModelController::class);
     Route::apiResource('body-types', \App\Http\Controllers\Api\Admin\BodyTypeController::class);
