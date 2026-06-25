@@ -10,13 +10,6 @@ class ProvinceController extends Controller
 {
     public function index(Request $request)
     {
-        // Cache full list for public usage (dropdowns, etc)
-        if (!$request->filled('search') && !$request->has('page')) {
-            return \Illuminate\Support\Facades\Cache::remember('provinces_all', 86400, function() {
-                return Province::all();
-            });
-        }
-
         $query = Province::query();
 
         if ($request->filled('search')) {

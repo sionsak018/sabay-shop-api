@@ -19,9 +19,7 @@ class AttributeController extends Controller
 
     public function index()
     {
-        return \Illuminate\Support\Facades\Cache::remember('attributes_all', 3600, function() {
-            return Attribute::with('options')->get();
-        });
+        return response()->json(Attribute::with('options')->get());
     }
 
     public function store(Request $request)

@@ -19,9 +19,7 @@ class BrandController extends Controller
 
     public function index()
     {
-        return \Illuminate\Support\Facades\Cache::remember('brands_all', 86400, function() {
-            return Brand::with('category')->get();
-        });
+        return response()->json(Brand::with('category')->get());
     }
 
     public function store(Request $request)

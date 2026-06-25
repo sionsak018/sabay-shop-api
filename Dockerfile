@@ -13,9 +13,9 @@ RUN apk add --no-cache \
     linux-headers
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo_mysql mbstring zip exif pcntl gd opcache
+RUN docker-php-ext-install pdo_mysql mbstring zip exif pcntl gd
 
-# ... Install Composer ...
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Set working directory
@@ -25,20 +25,10 @@ COPY . .
 # Install Laravel dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Production optimizations for PHP
-RUN { \
-    echo 'opcache.memory_consumption=128'; \
-    echo 'opcache.interned_strings_buffer=8'; \
-    echo 'opcache.max_accelerated_files=4000'; \
-    echo 'opcache.revalidate_freq=2'; \
-    echo 'opcache.fast_shutdown=1'; \
-    echo 'opcache.enable_cli=1'; \
-    } > /usr/local/etc/php/conf.d/opcache-recommended.ini
-
-# Set PHP configuration for larger uploads and speed
+# Set PHP configuration for larger uploads
 RUN echo "upload_max_filesize=20M" > /usr/local/etc/php/conf.d/uploads.ini && \
     echo "post_max_size=25M" >> /usr/local/etc/php/conf.d/uploads.ini && \
-    echo "memory_limit=512M" >> /usr/local/etc/php/conf.d/uploads.ini
+    echo "memory_limit=256M" >> /usr/local/etc/php/conf.d/uploads.ini
 
 # Set permissions
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
@@ -46,9 +36,5 @@ RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 # Expose port
 EXPOSE 8000
 
-# Run optimization commands before starting
-CMD php artisan migrate --force && \
-    php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan view:cache && \
-    php artisan serve --host 0.0.0.0 --port 8000
+# Start Laravel server and run migrations
+CMD php artisan migrate --force && php artisan serve --host 0.0.0.0 --port 8000

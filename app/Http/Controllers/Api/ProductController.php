@@ -21,17 +21,7 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $user = auth('sanctum')->user();
-
-        // Optimization: For list views, we don't need ALL images or ALL heavy attributes.
-        // We only eager load the basic info and the first image, and exclude 'description'.
-        $query = Product::with([
-            'seller:id,name,avatar',
-            'category:id,name',
-            'images' => function($q) {
-                $q->select('id', 'product_id', 'image_url')->orderBy('sort_order', 'asc')->limit(1);
-            },
-            'province:id,name'
-        ])->select(['id', 'seller_id', 'category_id', 'title', 'price', 'discount_price', 'condition', 'location', 'province_id', 'status', 'created_at']);
+        $query = Product::with(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']);
 
         // Only filter by active if NOT filtering by a specific user/seller
         if (!$request->filled('user_id') && !$request->filled('seller_id')) {
@@ -337,31 +327,25 @@ class ProductController extends Controller
     public function show($id)
     {
         $user = auth('sanctum')->user();
+        $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
+                    ->where('id', $id)
+                    ->where('status', 'active');
 
-        // Use cache for the product detail to make repeated views instant
-        $cacheKey = 'product_detail_' . $id . ($user ? '_u' . $user->id : '');
-
-        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function() use ($id, $user) {
-            $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
-                        ->where('id', $id)
-                        ->where('status', 'active');
-
-            if ($user) {
-                $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
-                    $q->where('user_id', $user->id);
-                }]);
-            }
-
-            $product = $query->firstOrFail();
-
-            // Only load attribute values for attributes currently assigned to this product's category
-            $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
-            $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
-                $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
+        if ($user) {
+            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
+                $q->where('user_id', $user->id);
             }]);
+        }
 
-            return response()->json($product);
-        });
+        $product = $query->firstOrFail();
+
+        // Only load attribute values for attributes currently assigned to this product's category
+        $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
+        $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
+            $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
+        }]);
+
+        return response()->json($product);
     }
 
     public function userProducts(Request $request)

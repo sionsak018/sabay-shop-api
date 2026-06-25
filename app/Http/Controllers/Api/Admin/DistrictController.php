@@ -10,13 +10,6 @@ class DistrictController extends Controller
 {
     public function index(Request $request)
     {
-        // Cache by province if no search/paging
-        if ($request->filled('province_id') && !$request->filled('search') && !$request->has('page')) {
-            return \Illuminate\Support\Facades\Cache::remember('districts_prov_'.$request->province_id, 86400, function() use ($request) {
-                return District::where('province_id', $request->province_id)->get();
-            });
-        }
-
         $query = District::with('province');
         if ($request->filled('province_id')) {
             $query->where('province_id', $request->province_id);

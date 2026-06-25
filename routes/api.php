@@ -10,7 +10,6 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\CategoryController;
 
 // Public routes
-Route::get('/home', [\App\Http\Controllers\Api\HomeController::class, 'index']);
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 

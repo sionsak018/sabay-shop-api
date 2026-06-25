@@ -19,13 +19,6 @@ class CategoryController extends Controller
 
     public function index(Request $request)
     {
-        // Cache categories if there's no active search to speed up the home page
-        if (!$request->filled('search') && !$request->filled('parent_id')) {
-            return \Illuminate\Support\Facades\Cache::remember('categories_all', 3600, function() {
-                return Category::all();
-            });
-        }
-
         $query = Category::query();
 
         if ($request->filled('search')) {
