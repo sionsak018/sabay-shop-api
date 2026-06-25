@@ -58,9 +58,17 @@ class BodyTypeController extends Controller
             if ($url) {
                 $bodyType->image_url = $url;
             }
+        } elseif ($request->boolean('remove_image')) {
+            if ($bodyType->image_url) {
+                $this->cloudinaryService->delete($bodyType->image_url);
+            }
+            $bodyType->image_url = null;
         }
 
-        $bodyType->update($validated);
+        unset($validated['image']);
+        $bodyType->fill($validated);
+        $bodyType->save();
+
         return response()->json($bodyType);
     }
 

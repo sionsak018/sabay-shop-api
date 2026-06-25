@@ -60,9 +60,17 @@ class BrandController extends Controller
             if ($url) {
                 $brand->image_url = $url;
             }
+        } elseif ($request->boolean('remove_image')) {
+            if ($brand->image_url) {
+                $this->cloudinaryService->delete($brand->image_url);
+            }
+            $brand->image_url = null;
         }
 
-        $brand->update($validated);
+        unset($validated['image']);
+        $brand->fill($validated);
+        $brand->save();
+
         return response()->json($brand);
     }
 

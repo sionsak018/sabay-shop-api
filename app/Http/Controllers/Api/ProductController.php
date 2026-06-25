@@ -21,7 +21,17 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $user = auth('sanctum')->user();
-        $query = Product::with(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']);
+
+        // Optimization: For list views, we don't need ALL images or ALL heavy attributes.
+        // We only eager load the basic info and the first image.
+        $query = Product::with([
+            'seller:id,name,avatar',
+            'category:id,name',
+            'images' => function($q) {
+                $q->select('id', 'product_id', 'image_url')->orderBy('sort_order', 'asc')->limit(1);
+            },
+            'province:id,name'
+        ]);
 
         // Only filter by active if NOT filtering by a specific user/seller
         if (!$request->filled('user_id') && !$request->filled('seller_id')) {

@@ -59,17 +59,19 @@ class SliderController extends Controller
             }
             $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/sliders');
             if ($url) {
-                $validated['image_url'] = $url;
+                $slider->image_url = $url;
             }
         } elseif ($request->boolean('remove_image')) {
             if ($slider->image_url) {
                 $this->cloudinaryService->delete($slider->image_url);
             }
             $slider->image_url = null;
-            $slider->save();
         }
 
-        $slider->update($validated);
+        unset($validated['image']);
+        $slider->fill($validated);
+        $slider->save();
+
         return response()->json($slider);
     }
 
