@@ -23,7 +23,7 @@ class ProductController extends Controller
         $user = auth('sanctum')->user();
 
         // Optimization: For list views, we don't need ALL images or ALL heavy attributes.
-        // We only eager load the basic info and the first image.
+        // We only eager load the basic info and the first image, and exclude 'description'.
         $query = Product::with([
             'seller:id,name,avatar',
             'category:id,name',
@@ -31,7 +31,7 @@ class ProductController extends Controller
                 $q->select('id', 'product_id', 'image_url')->orderBy('sort_order', 'asc')->limit(1);
             },
             'province:id,name'
-        ]);
+        ])->select(['id', 'seller_id', 'category_id', 'title', 'price', 'discount_price', 'condition', 'location', 'province_id', 'status', 'created_at']);
 
         // Only filter by active if NOT filtering by a specific user/seller
         if (!$request->filled('user_id') && !$request->filled('seller_id')) {
