@@ -337,25 +337,31 @@ class ProductController extends Controller
     public function show($id)
     {
         $user = auth('sanctum')->user();
-        $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
-                    ->where('id', $id)
-                    ->where('status', 'active');
 
-        if ($user) {
-            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
-                $q->where('user_id', $user->id);
+        // Use cache for the product detail to make repeated views instant
+        $cacheKey = 'product_detail_' . $id . ($user ? '_u' . $user->id : '');
+
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 300, function() use ($id, $user) {
+            $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
+                        ->where('id', $id)
+                        ->where('status', 'active');
+
+            if ($user) {
+                $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                }]);
+            }
+
+            $product = $query->firstOrFail();
+
+            // Only load attribute values for attributes currently assigned to this product's category
+            $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
+            $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
+                $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
             }]);
-        }
 
-        $product = $query->firstOrFail();
-
-        // Only load attribute values for attributes currently assigned to this product's category
-        $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
-        $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
-            $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
-        }]);
-
-        return response()->json($product);
+            return response()->json($product);
+        });
     }
 
     public function userProducts(Request $request)
