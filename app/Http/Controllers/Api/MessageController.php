@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Message;
 use App\Models\MessageReaction;
+use App\Models\User;
 use App\Services\CloudinaryService;
 
 class MessageController extends Controller
@@ -22,7 +23,12 @@ class MessageController extends Controller
         // Get all conversations for the logged-in user
         $messages = Message::where('from_user_id', $request->user()->id)
                     ->orWhere('to_user_id', $request->user()->id)
-                    ->with(['fromUser', 'toUser', 'product', 'reactions'])
+                    ->with([
+                        'fromUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+                        'toUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+                        'product',
+                        'reactions',
+                    ])
                     ->orderBy('created_at', 'desc')
                     ->get();
         return response()->json($messages);
@@ -58,7 +64,11 @@ class MessageController extends Controller
             'file_path' => $filePath,
         ]);
 
-        return response()->json($message->load(['fromUser', 'toUser', 'reactions']), 201);
+        return response()->json($message->load([
+            'fromUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+            'toUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+            'reactions',
+        ]), 201);
     }
 
     public function react(Request $request, $id)

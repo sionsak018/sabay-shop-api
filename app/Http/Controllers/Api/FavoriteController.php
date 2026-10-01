@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class FavoriteController extends Controller
@@ -12,7 +13,13 @@ class FavoriteController extends Controller
     {
         $user = $request->user();
         $favorites = $user->favorites()
-            ->with(['seller', 'category', 'images', 'province', 'commune'])
+            ->with([
+                'seller' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+                'category',
+                'images',
+                'province',
+                'commune',
+            ])
             ->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
                 $q->where('user_id', $user->id);
             }])

@@ -31,12 +31,16 @@ class FollowController extends Controller
     public function followers(Request $request, $userId)
     {
         $user = User::findOrFail($userId);
-        return response()->json($user->followers);
+        return response()->json(
+            $user->followers->map(fn ($follower) => $follower->only(User::PUBLIC_COLUMNS))->values()
+        );
     }
 
     public function following(Request $request, $userId)
     {
         $user = User::findOrFail($userId);
-        return response()->json($user->following);
+        return response()->json(
+            $user->following->map(fn ($followed) => $followed->only(User::PUBLIC_COLUMNS))->values()
+        );
     }
 }

@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\CloudinaryService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -22,17 +24,18 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $user = auth('sanctum')->user();
-        $query = Product::with(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']);
+        $query = Product::with([
+            'seller' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+            'category',
+            'images',
+            'province',
+            'commune',
+            'attributeValues.attribute',
+        ]);
 
         // Only filter by active if NOT filtering by a specific user/seller
         if (!$request->filled('user_id') && !$request->filled('seller_id')) {
             $query->where('status', 'active');
-        }
-
-        if ($user) {
-            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            }]);
         }
 
         if ($request->filled('keyword')) {
@@ -97,7 +100,66 @@ class ProductController extends Controller
             }
         }
 
+        $page = (int) $request->get('page', 1);
+
+        // The default, unfiltered listing (home page / first page of /products)
+        // is identical for every visitor, so cache one copy per sort/page and
+        // layer per-user favourite flags on top.
+        if ($this->isDefaultListing($request, $sort)) {
+            $version = Cache::get(Product::LISTINGS_CACHE_VERSION_KEY, 0);
+            $payload = Cache::remember(
+                "products.default.{$version}.{$sort}.{$page}",
+                now()->addMinute(),
+                fn () => $query->paginate(20)->toArray()
+            );
+
+            if ($user) {
+                $favorited = DB::table('favorites')
+                    ->where('user_id', $user->id)
+                    ->whereIn('product_id', array_column($payload['data'], 'id'))
+                    ->pluck('product_id');
+
+                foreach ($payload['data'] as &$item) {
+                    $item['is_favorited'] = $favorited->contains($item['id']);
+                }
+                unset($item);
+            }
+
+            return response()->json($payload);
+        }
+
+        if ($user) {
+            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            }]);
+        }
+
         return response()->json($query->paginate(20));
+    }
+
+    /**
+     * A "default" listing has no filters applied, so its result can be shared
+     * across every visitor. Only these are cached.
+     */
+    private function isDefaultListing(Request $request, string $sort): bool
+    {
+        if (!in_array($sort, ['latest', 'price_low', 'price_high'], true)) {
+            return false;
+        }
+
+        foreach (['keyword', 'category_id', 'min_price', 'max_price', 'province_id', 'district_id', 'user_id', 'seller_id', 'location'] as $param) {
+            if ($request->filled($param)) {
+                return false;
+            }
+        }
+
+        foreach (array_keys($request->all()) as $key) {
+            if (str_starts_with($key, 'attr_')) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function checkLimit(Request $request)
@@ -217,6 +279,7 @@ class ProductController extends Controller
         }
 
         Cache::forget("product.{$product->id}");
+        Product::flushListingsCache();
         return response()->json($product->load('images'), 201);
     }
 
@@ -332,6 +395,7 @@ class ProductController extends Controller
         }
 
         Cache::forget("product.{$product->id}");
+        Product::flushListingsCache();
         return response()->json($product->load(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']));
     }
 
@@ -339,23 +403,39 @@ class ProductController extends Controller
     {
         $user = auth('sanctum')->user();
 
-        $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
-                    ->where('id', $id)
-                    ->where('status', 'active');
+        // Cache the public product payload (as an array) and layer the
+        // per-user is_favorited flag on top, so authed and guest requests
+        // share one cached copy.
+        $product = Cache::remember("product.{$id}", now()->addHour(), function () use ($id) {
+            $query = Product::with([
+                'seller' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+                'category.parent',
+                'images',
+                'brand',
+                'brandModel',
+                'bodyType',
+                'province',
+                'district',
+                'commune',
+                'village',
+            ])
+                ->where('id', $id)
+                ->where('status', 'active');
+
+            $product = $query->firstOrFail();
+
+            // Only load attribute values for attributes currently assigned to this product's category
+            $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
+            $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
+                $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
+            }]);
+
+            return $product->toArray();
+        });
 
         if ($user) {
-            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            }]);
+            $product['is_favorited'] = $user->favorites()->where('product_id', $id)->exists();
         }
-
-        $product = $query->firstOrFail();
-
-        // Only load attribute values for attributes currently assigned to this product's category
-        $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
-        $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
-            $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
-        }]);
 
         return response()->json($product);
     }
@@ -378,6 +458,7 @@ class ProductController extends Controller
     {
         $product = $request->user()->products()->findOrFail($id);
         Cache::forget("product.{$product->id}");
+        Product::flushListingsCache();
         // The deleting hook in Product model handles image deletion from DB and Cloudinary
         $product->delete();
         return response()->json(['message' => 'Product deleted successfully']);

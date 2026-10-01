@@ -91,6 +91,11 @@ class SliderController extends Controller
      */
     public function getActive()
     {
-        return response()->json(Slider::where('is_active', true)->orderBy('sort_order')->get());
+        // Cache a plain array; see CategoryController::index for why.
+        $sliders = Cache::remember('sliders.active', now()->addDay(), function () {
+            return Slider::where('is_active', true)->orderBy('sort_order')->get()->toArray();
+        });
+
+        return response()->json($sliders);
     }
 }

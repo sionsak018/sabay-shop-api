@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class AdminProductController extends Controller
 {
@@ -30,6 +31,8 @@ class AdminProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $product->update($request->all());
+        Cache::forget("product.{$product->id}");
+        Product::flushListingsCache();
         return response()->json($product);
     }
 
@@ -37,6 +40,8 @@ class AdminProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $product->delete();
+        Cache::forget("product.{$product->id}");
+        Product::flushListingsCache();
         return response()->json(['message' => 'Product deleted by admin']);
     }
 }

@@ -33,6 +33,22 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    /**
+     * Columns safe to expose on a public/embedded user payload, such as the
+     * seller attached to a product. Deliberately excludes email, phone and
+     * email_verified_at so browsing never leaks account PII.
+     */
+    public const PUBLIC_COLUMNS = [
+        'id',
+        'name',
+        'avatar',
+        'cover_photo',
+        'about_me',
+        'role',
+        'account_type',
+        'created_at',
+    ];
+
     protected $appends = ['permissions'];
 
     public function getPermissionsAttribute()

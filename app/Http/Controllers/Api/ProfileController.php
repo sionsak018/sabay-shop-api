@@ -92,7 +92,6 @@ class ProfileController extends Controller
                 'avatar' => $user->avatar,
                 'cover_photo' => $user->cover_photo,
                 'about_me' => $user->about_me,
-                'phone' => $user->phone,
                 'province' => $user->province,
                 'district' => $user->district,
                 'commune' => $user->commune,

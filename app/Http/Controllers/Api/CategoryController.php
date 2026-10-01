@@ -20,18 +20,29 @@ class CategoryController extends Controller
 
     public function index(Request $request)
     {
-        $query = Category::query();
+        // Cache plain arrays, not Eloquent collections: the file cache
+        // serializes values and unserialized collections can arrive as
+        // incomplete objects.
+        $categories = Cache::remember('categories.all', now()->addDay(), function () {
+            return Category::query()->get()->toArray();
+        });
 
         if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%')
-                  ->orWhere('slug', 'like', '%' . $request->search . '%');
+            $search = strtolower($request->search);
+            $categories = array_values(array_filter($categories, function ($category) use ($search) {
+                return str_contains(strtolower($category['name']), $search)
+                    || str_contains(strtolower($category['slug']), $search);
+            }));
         }
 
         if ($request->filled('parent_id')) {
-            $query->where('parent_id', $request->parent_id);
+            $parentId = (int) $request->parent_id;
+            $categories = array_values(array_filter(
+                $categories,
+                fn ($category) => (int) $category['parent_id'] === $parentId
+            ));
         }
 
-        $categories = $query->get();
         return response()->json($categories);
     }
 

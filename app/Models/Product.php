@@ -6,6 +6,20 @@ use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
+    /**
+     * Version stamp for default-listing cache keys. Bumping it abandons every
+     * cached listing at once (the file cache store has no tag support).
+     */
+    public const LISTINGS_CACHE_VERSION_KEY = 'products.list.version';
+
+    /**
+     * Invalidate cached default listings after any product changes.
+     */
+    public static function flushListingsCache(): void
+    {
+        \Illuminate\Support\Facades\Cache::forever(self::LISTINGS_CACHE_VERSION_KEY, now()->getTimestamp());
+    }
+
     protected $fillable = [
         'seller_id',
         'category_id',
