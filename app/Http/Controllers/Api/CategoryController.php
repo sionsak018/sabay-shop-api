@@ -101,8 +101,36 @@ class CategoryController extends Controller
 
     public function destroy($id)
     {
-        $category = Category::findOrFail($id);
+        $category = Category::with('children')->findOrFail($id);
+
+        if ($this->hasAssociatedProducts($category)) {
+            return response()->json([
+                'message' => 'Cannot delete category because it or its subcategories have products associated with them. Please delete or reassign the products first.'
+            ], 422);
+        }
+
         $category->delete();
         return response()->json(['message' => 'Category deleted']);
+    }
+
+    /**
+     * Check if a category or any of its children have products.
+     *
+     * @param  \App\Models\Category  $category
+     * @return bool
+     */
+    private function hasAssociatedProducts($category)
+    {
+        if ($category->products()->exists()) {
+            return true;
+        }
+
+        foreach ($category->children as $child) {
+            if ($this->hasAssociatedProducts($child)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

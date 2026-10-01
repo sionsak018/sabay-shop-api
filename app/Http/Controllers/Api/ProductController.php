@@ -149,6 +149,7 @@ class ProductController extends Controller
             'poster_email' => 'nullable|email',
             'poster_phones' => 'nullable|string', // JSON string from frontend
             'company_name' => 'nullable|string',
+            'discount_price' => 'nullable|numeric|min:0',
             // Disable strict validation temporarily to debug
             // 'images' => 'array|max:10',
             // 'images.*' => 'image|mimes:jpg,jpeg,png|max:2048'
@@ -173,9 +174,10 @@ class ProductController extends Controller
                         if ($attrModel) {
                             $name = strtolower(str_replace(' ', '', $attrModel->name));
                             if ($name === 'discountprice' || $name === 'discount') {
-                                if (is_numeric($value) && $value > 0) {
+                                // Only auto-sync if discount_price was not provided in main request
+                                if (is_numeric($value) && $value > 0 && !$request->has('discount_price')) {
                                     $product->discount_price = $value;
-                                } else {
+                                } elseif (!$request->has('discount_price')) {
                                     $product->discount_price = null;
                                 }
                             }
@@ -252,6 +254,7 @@ class ProductController extends Controller
             'poster_email' => 'nullable|email',
             'poster_phones' => 'nullable|string',
             'company_name' => 'nullable|string',
+            'discount_price' => 'nullable|numeric|min:0',
         ]);
 
         $product->update($request->except(['images', 'attributes', 'deleted_image_ids']));
@@ -274,7 +277,11 @@ class ProductController extends Controller
         $attributesData = $request->input('attributes');
         if ($attributesData) {
             $product->attributeValues()->delete();
-            $product->discount_price = null;
+
+            // Only clear discount_price if it's not provided in the main request
+            if (!$request->has('discount_price')) {
+                $product->discount_price = null;
+            }
 
             // Handle both JSON string and array
             $attrs = is_string($attributesData) ? json_decode($attributesData, true) : $attributesData;
@@ -292,7 +299,8 @@ class ProductController extends Controller
                         if ($attrModel) {
                             $name = strtolower(str_replace(' ', '', $attrModel->name));
                             if ($name === 'discountprice' || $name === 'discount') {
-                                if (is_numeric($value) && $value > 0) {
+                                // Only auto-sync if discount_price was not provided in main request
+                                if (is_numeric($value) && $value > 0 && !$request->has('discount_price')) {
                                     $product->discount_price = $value;
                                 }
                             }
