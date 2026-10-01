@@ -33,8 +33,8 @@ RUN echo "upload_max_filesize=20M" > /usr/local/etc/php/conf.d/uploads.ini && \
 # Set permissions
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 
-# Expose port
-EXPOSE 8000
+# Expose port (Render overrides or uses PORT env var)
+EXPOSE 10000
 
 # Start Laravel server and run migrations
-CMD php artisan migrate --force && php artisan serve --host 0.0.0.0 --port 8000
+CMD php artisan migrate --force && php artisan serve --host 0.0.0.0 --port ${PORT:-10000}
