@@ -86,6 +86,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Query Profiler
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, the QueryProfiler middleware attaches X-Query-Count,
+    | X-Query-Time-Ms and X-Response-Time-Ms headers to API responses and
+    | writes a "query-profile" entry to the log. Intended as a temporary
+    | diagnostic aid - leave disabled in normal operation.
+    |
+    */
+
+    'query_profile' => [
+        'enabled' => env('QUERY_PROFILE_ENABLED', false),
+        'slow_ms' => (float) env('QUERY_PROFILE_SLOW_MS', 100),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Encryption Key
     |--------------------------------------------------------------------------
     |

@@ -33,7 +33,7 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    protected $appends = ['ads_count', 'followers_count', 'following_count', 'permissions'];
+    protected $appends = ['permissions'];
 
     public function getPermissionsAttribute()
     {
@@ -46,21 +46,6 @@ class User extends Authenticatable
         }
 
         return [];
-    }
-
-    public function getAdsCountAttribute()
-    {
-        return $this->products()->where('status', 'active')->count();
-    }
-
-    public function getFollowersCountAttribute()
-    {
-        return $this->followers()->count();
-    }
-
-    public function getFollowingCountAttribute()
-    {
-        return $this->following()->count();
     }
 
     protected static function boot()

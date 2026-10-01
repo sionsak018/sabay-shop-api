@@ -12,8 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // API-only app: there is no `login` route for guests to be redirected
+        // to. Returning null makes Authenticate throw AuthenticationException,
+        // which the handler renders as a 401 JSON body. Without this every
+        // unauthenticated request to a protected route 500s with a full
+        // debug stack trace.
+        $middleware->redirectGuestsTo(fn () => null);
+
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\QueryProfiler::class,
         ]);
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,

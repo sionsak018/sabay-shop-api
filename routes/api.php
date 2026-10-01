@@ -94,11 +94,5 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::post('/category-attributes/{categoryId}', [\App\Http\Controllers\Api\Admin\CategoryAttributeController::class, 'sync']);
 
     // Placeholder for configuration
-    Route::get('/config', function() {
-        return response()->json([
-            'site_name' => 'Sabay Shop',
-            'contact_email' => 'support@sabayshop.com',
-            'maintenance_mode' => false
-        ]);
-    });
+    Route::get('/config', [\App\Http\Controllers\Api\ConfigController::class, 'index']);
 });
