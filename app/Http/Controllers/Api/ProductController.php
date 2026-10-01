@@ -339,24 +339,23 @@ class ProductController extends Controller
     {
         $user = auth('sanctum')->user();
 
-        $product = Cache::remember("product.{$id}", now()->hours(12), function () use ($id) {
-            $prod = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
-                        ->where('id', $id)
-                        ->where('status', 'active')
-                        ->firstOrFail();
-
-            $assignedAttributeIds = $prod->category->attributes()->pluck('attributes.id')->toArray();
-            $prod->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
-                $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
-            }]);
-
-            return $prod;
-        });
+        $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
+                    ->where('id', $id)
+                    ->where('status', 'active');
 
         if ($user) {
-            $isFavorited = $product->favoritedBy()->where('user_id', $user->id)->exists();
-            $product->is_favorited = $isFavorited;
+            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
+                $q->where('user_id', $user->id);
+            }]);
         }
+
+        $product = $query->firstOrFail();
+
+        // Only load attribute values for attributes currently assigned to this product's category
+        $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
+        $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
+            $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
+        }]);
 
         return response()->json($product);
     }

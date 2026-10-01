@@ -20,25 +20,18 @@ class CategoryController extends Controller
 
     public function index(Request $request)
     {
-        if (!$request->filled('search') && !$request->filled('parent_id')) {
-            $categories = Cache::remember('categories.all', now()->hours(24), function () {
-                return Category::query()->get();
-            });
-        } else {
-            $query = Category::query();
+        $query = Category::query();
 
-            if ($request->filled('search')) {
-                $query->where('name', 'like', '%' . $request->search . '%')
-                      ->orWhere('slug', 'like', '%' . $request->search . '%');
-            }
-
-            if ($request->filled('parent_id')) {
-                $query->where('parent_id', $request->parent_id);
-            }
-
-            $categories = $query->get();
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('slug', 'like', '%' . $request->search . '%');
         }
 
+        if ($request->filled('parent_id')) {
+            $query->where('parent_id', $request->parent_id);
+        }
+
+        $categories = $query->get();
         return response()->json($categories);
     }
 
