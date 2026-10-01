@@ -54,6 +54,13 @@ class CloudinaryService
 
                 $upload = $this->cloudinary->uploadApi()->upload($path, [
                     'folder' => $folder,
+                    'transformation' => [
+                        'width' => 1200,
+                        'height' => 1200,
+                        'crop' => 'limit',
+                        'quality' => 'auto',
+                        'fetch_format' => 'auto',
+                    ],
                 ]);
 
                 \Log::info("Cloudinary upload success: " . $upload['secure_url']);

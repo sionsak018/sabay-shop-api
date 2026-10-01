@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Slider;
 use Illuminate\Http\Request;
 use App\Services\CloudinaryService;
+use Illuminate\Support\Facades\Cache;
 
 class SliderController extends Controller
 {
@@ -38,6 +39,7 @@ class SliderController extends Controller
         }
 
         $slider = Slider::create($validated);
+        Cache::forget('sliders.active');
         return response()->json($slider, 201);
     }
 
@@ -72,6 +74,7 @@ class SliderController extends Controller
         $slider->fill($validated);
         $slider->save();
 
+        Cache::forget('sliders.active');
         return response()->json($slider);
     }
 
@@ -79,6 +82,7 @@ class SliderController extends Controller
     {
         $slider = Slider::findOrFail($id);
         $slider->delete();
+        Cache::forget('sliders.active');
         return response()->json(['message' => 'Slider deleted']);
     }
 
@@ -87,6 +91,9 @@ class SliderController extends Controller
      */
     public function getActive()
     {
-        return response()->json(Slider::where('is_active', true)->orderBy('sort_order')->get());
+        $sliders = Cache::remember('sliders.active', now()->hours(24), function () {
+            return Slider::where('is_active', true)->orderBy('sort_order')->get();
+        });
+        return response()->json($sliders);
     }
 }

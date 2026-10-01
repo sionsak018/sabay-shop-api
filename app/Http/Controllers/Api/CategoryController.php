@@ -7,6 +7,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Services\CloudinaryService;
+use Illuminate\Support\Facades\Cache;
 
 class CategoryController extends Controller
 {
@@ -19,18 +20,25 @@ class CategoryController extends Controller
 
     public function index(Request $request)
     {
-        $query = Category::query();
+        if (!$request->filled('search') && !$request->filled('parent_id')) {
+            $categories = Cache::remember('categories.all', now()->hours(24), function () {
+                return Category::query()->get();
+            });
+        } else {
+            $query = Category::query();
 
-        if ($request->filled('search')) {
-            $query->where('name', 'like', '%' . $request->search . '%')
-                  ->orWhere('slug', 'like', '%' . $request->search . '%');
+            if ($request->filled('search')) {
+                $query->where('name', 'like', '%' . $request->search . '%')
+                      ->orWhere('slug', 'like', '%' . $request->search . '%');
+            }
+
+            if ($request->filled('parent_id')) {
+                $query->where('parent_id', $request->parent_id);
+            }
+
+            $categories = $query->get();
         }
 
-        if ($request->filled('parent_id')) {
-            $query->where('parent_id', $request->parent_id);
-        }
-
-        $categories = $query->get();
         return response()->json($categories);
     }
 
@@ -51,6 +59,7 @@ class CategoryController extends Controller
         }
 
         $category = Category::create($validated);
+        Cache::forget('categories.all');
         return response()->json($category, 201);
     }
 
@@ -96,6 +105,7 @@ class CategoryController extends Controller
         $category->fill($validated);
         $category->save();
 
+        Cache::forget('categories.all');
         return response()->json($category);
     }
 
@@ -110,6 +120,7 @@ class CategoryController extends Controller
         }
 
         $category->delete();
+        Cache::forget('categories.all');
         return response()->json(['message' => 'Category deleted']);
     }
 

@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Services\CloudinaryService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ProductController extends Controller
 {
@@ -215,6 +216,7 @@ class ProductController extends Controller
             \Log::warning('No images found in request. Keys: ' . implode(', ', array_keys($allFiles)));
         }
 
+        Cache::forget("product.{$product->id}");
         return response()->json($product->load('images'), 201);
     }
 
@@ -329,29 +331,32 @@ class ProductController extends Controller
             }
         }
 
+        Cache::forget("product.{$product->id}");
         return response()->json($product->load(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']));
     }
 
     public function show($id)
     {
         $user = auth('sanctum')->user();
-        $query = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
-                    ->where('id', $id)
-                    ->where('status', 'active');
+
+        $product = Cache::remember("product.{$id}", now()->hours(12), function () use ($id) {
+            $prod = Product::with(['seller', 'category.parent', 'images', 'brand', 'brandModel', 'bodyType', 'province', 'district', 'commune', 'village'])
+                        ->where('id', $id)
+                        ->where('status', 'active')
+                        ->firstOrFail();
+
+            $assignedAttributeIds = $prod->category->attributes()->pluck('attributes.id')->toArray();
+            $prod->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
+                $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
+            }]);
+
+            return $prod;
+        });
 
         if ($user) {
-            $query->withExists(['favoritedBy as is_favorited' => function($q) use ($user) {
-                $q->where('user_id', $user->id);
-            }]);
+            $isFavorited = $product->favoritedBy()->where('user_id', $user->id)->exists();
+            $product->is_favorited = $isFavorited;
         }
-
-        $product = $query->firstOrFail();
-
-        // Only load attribute values for attributes currently assigned to this product's category
-        $assignedAttributeIds = $product->category->attributes()->pluck('attributes.id')->toArray();
-        $product->load(['attributeValues' => function($q) use ($assignedAttributeIds) {
-            $q->whereIn('attribute_id', $assignedAttributeIds)->with(['attribute.options']);
-        }]);
 
         return response()->json($product);
     }
@@ -373,6 +378,7 @@ class ProductController extends Controller
     public function destroy(Request $request, $id)
     {
         $product = $request->user()->products()->findOrFail($id);
+        Cache::forget("product.{$product->id}");
         // The deleting hook in Product model handles image deletion from DB and Cloudinary
         $product->delete();
         return response()->json(['message' => 'Product deleted successfully']);
