@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BrandModel;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -11,7 +12,9 @@ class BrandModelController extends Controller
 {
     public function index()
     {
-        return response()->json(BrandModel::with('brand')->get());
+        return response()->json(
+            MasterDataCache::remember('brand_models.all', fn () => BrandModel::with('brand')->get()->toArray())
+        );
     }
 
     public function store(Request $request)
@@ -28,6 +31,7 @@ class BrandModelController extends Controller
         ]);
 
         $model = BrandModel::create($validated);
+        MasterDataCache::flush();
         return response()->json($model, 201);
     }
 
@@ -46,12 +50,14 @@ class BrandModelController extends Controller
         ]);
 
         $model->update($validated);
+        MasterDataCache::flush();
         return response()->json($model);
     }
 
     public function destroy($id)
     {
         BrandModel::findOrFail($id)->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Model deleted']);
     }
 }

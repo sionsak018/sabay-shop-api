@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use App\Services\CloudinaryService;
 
 class ProfileController extends Controller
@@ -76,44 +79,65 @@ class ProfileController extends Controller
         }
 
         $user->update($validated);
+        Cache::forget("profile.show.{$user->id}");
 
         return response()->json($user->load(['province', 'district', 'commune', 'village']));
     }
 
     public function show($id)
     {
-        $user = \App\Models\User::with(['province', 'district', 'commune', 'village'])->findOrFail($id);
         $me = auth('sanctum')->user();
 
-        return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'avatar' => $user->avatar,
-                'cover_photo' => $user->cover_photo,
-                'about_me' => $user->about_me,
-                'province' => $user->province,
-                'district' => $user->district,
-                'commune' => $user->commune,
-                'village' => $user->village,
-                'created_at' => $user->created_at,
-            ],
-            'stats' => [
-                'followers_count' => $user->followers()->count(),
-                'following_count' => $user->following()->count(),
-                'ads_count' => $user->products()->where('status', 'active')->count(),
-            ],
-            'is_following' => $me ? $me->following()->where('following_id', $user->id)->exists() : false,
-            'products' => $user->products()
-                ->with(['category', 'images', 'province', 'commune'])
-                ->withExists(['favoritedBy as is_favorited' => function($q) use ($me) {
-                    if ($me) $q->where('user_id', $me->id);
-                    else $q->where('user_id', 0);
-                }])
-                ->where('status', 'active')
-                ->latest()
-                ->get()
-        ]);
+        // The public part of a profile is identical for every visitor, so cache
+        // it (as arrays) and layer the per-viewer follow/favourite flags on top.
+        $payload = Cache::remember("profile.show.{$id}", now()->addMinute(), function () use ($id) {
+            $user = User::with(['province', 'district', 'commune', 'village'])->findOrFail($id);
+
+            return [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'avatar' => $user->avatar,
+                    'cover_photo' => $user->cover_photo,
+                    'about_me' => $user->about_me,
+                    'province' => $user->province?->toArray(),
+                    'district' => $user->district?->toArray(),
+                    'commune' => $user->commune?->toArray(),
+                    'village' => $user->village?->toArray(),
+                    'created_at' => $user->created_at,
+                ],
+                'stats' => [
+                    'followers_count' => $user->followers()->count(),
+                    'following_count' => $user->following()->count(),
+                    'ads_count' => $user->products()->where('status', 'active')->count(),
+                ],
+                'products' => $user->products()
+                    ->with(['category', 'images', 'province'])
+                    ->where('status', 'active')
+                    ->latest()
+                    ->get()
+                    ->toArray(),
+            ];
+        });
+
+        $payload['is_following'] = $me
+            ? $me->following()->where('following_id', $id)->exists()
+            : false;
+
+        $favorited = collect();
+        if ($me && !empty($payload['products'])) {
+            $favorited = DB::table('favorites')
+                ->where('user_id', $me->id)
+                ->whereIn('product_id', array_column($payload['products'], 'id'))
+                ->pluck('product_id');
+        }
+
+        foreach ($payload['products'] as &$product) {
+            $product['is_favorited'] = $favorited->contains($product['id']);
+        }
+        unset($product);
+
+        return response()->json($payload);
     }
 
     public function stats(Request $request, $userId)

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Commune;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 
 class CommuneController extends Controller
@@ -25,7 +26,15 @@ class CommuneController extends Controller
             return response()->json($query->paginate($perPage));
         }
 
-        return response()->json($query->get());
+        if ($request->filled('search')) {
+            return response()->json($query->get());
+        }
+
+        $district = $request->filled('district_id') ? (int) $request->district_id : 'all';
+
+        return response()->json(
+            MasterDataCache::remember("communes.district.{$district}", fn () => $query->get()->toArray())
+        );
     }
 
     public function store(Request $request)
@@ -36,6 +45,7 @@ class CommuneController extends Controller
             'code' => 'required|string|unique:communes',
         ]);
         $commune = Commune::create($validated);
+        MasterDataCache::flush();
         return response()->json($commune->load('district.province'), 201);
     }
 
@@ -47,12 +57,14 @@ class CommuneController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'required|string|unique:communes,code,'.$commune->id,
         ]));
+        MasterDataCache::flush();
         return response()->json($commune->load('district.province'));
     }
 
     public function destroy($id)
     {
         Commune::findOrFail($id)->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Deleted']);
     }
 }

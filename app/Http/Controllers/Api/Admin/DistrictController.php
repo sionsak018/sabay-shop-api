@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\District;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 
 class DistrictController extends Controller
@@ -25,7 +26,15 @@ class DistrictController extends Controller
             return response()->json($query->paginate($perPage));
         }
 
-        return response()->json($query->get());
+        if ($request->filled('search')) {
+            return response()->json($query->get());
+        }
+
+        $province = $request->filled('province_id') ? (int) $request->province_id : 'all';
+
+        return response()->json(
+            MasterDataCache::remember("districts.province.{$province}", fn () => $query->get()->toArray())
+        );
     }
 
     public function store(Request $request)
@@ -36,6 +45,7 @@ class DistrictController extends Controller
             'code' => 'required|string|unique:districts',
         ]);
         $district = District::create($validated);
+        MasterDataCache::flush();
         return response()->json($district, 201);
     }
 
@@ -47,12 +57,14 @@ class DistrictController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'required|string|unique:districts,code,'.$district->id,
         ]));
+        MasterDataCache::flush();
         return response()->json($district);
     }
 
     public function destroy($id)
     {
         District::findOrFail($id)->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Deleted']);
     }
 }

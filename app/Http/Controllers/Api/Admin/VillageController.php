@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Village;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 
 class VillageController extends Controller
@@ -26,7 +27,15 @@ class VillageController extends Controller
             return response()->json($query->paginate($perPage));
         }
 
-        return response()->json($query->get());
+        if ($request->filled('search')) {
+            return response()->json($query->get());
+        }
+
+        $commune = $request->filled('commune_id') ? (int) $request->commune_id : 'all';
+
+        return response()->json(
+            MasterDataCache::remember("villages.commune.{$commune}", fn () => $query->get()->toArray())
+        );
     }
 
     public function store(Request $request)
@@ -38,6 +47,7 @@ class VillageController extends Controller
         ]);
 
         $village = Village::create($validated);
+        MasterDataCache::flush();
         return response()->json($village, 201);
     }
 
@@ -56,12 +66,14 @@ class VillageController extends Controller
         ]);
 
         $village->update($validated);
+        MasterDataCache::flush();
         return response()->json($village);
     }
 
     public function destroy($id)
     {
         Village::findOrFail($id)->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Village deleted']);
     }
 }

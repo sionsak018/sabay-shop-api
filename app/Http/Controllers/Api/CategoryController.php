@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Services\CloudinaryService;
@@ -64,6 +65,7 @@ class CategoryController extends Controller
 
         $category = Category::create($validated);
         Cache::forget('categories.all');
+        MasterDataCache::flush();
         return response()->json($category, 201);
     }
 
@@ -110,6 +112,7 @@ class CategoryController extends Controller
         $category->save();
 
         Cache::forget('categories.all');
+        MasterDataCache::flush();
         return response()->json($category);
     }
 
@@ -125,6 +128,7 @@ class CategoryController extends Controller
 
         $category->delete();
         Cache::forget('categories.all');
+        MasterDataCache::flush();
         return response()->json(['message' => 'Category deleted']);
     }
 

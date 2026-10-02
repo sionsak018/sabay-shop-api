@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Services\CloudinaryService;
@@ -19,7 +20,9 @@ class BrandController extends Controller
 
     public function index()
     {
-        return response()->json(Brand::with('category')->get());
+        return response()->json(
+            MasterDataCache::remember('brands.all', fn () => Brand::with('category')->get()->toArray())
+        );
     }
 
     public function store(Request $request)
@@ -39,6 +42,7 @@ class BrandController extends Controller
         }
 
         $brand = Brand::create($validated);
+        MasterDataCache::flush();
         return response()->json($brand, 201);
     }
 
@@ -70,6 +74,7 @@ class BrandController extends Controller
         unset($validated['image']);
         $brand->fill($validated);
         $brand->save();
+        MasterDataCache::flush();
 
         return response()->json($brand);
     }
@@ -78,6 +83,7 @@ class BrandController extends Controller
     {
         $brand = Brand::findOrFail($id);
         $brand->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Brand deleted']);
     }
 }

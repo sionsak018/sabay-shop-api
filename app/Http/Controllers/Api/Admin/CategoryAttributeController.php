@@ -5,14 +5,20 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Attribute;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 
 class CategoryAttributeController extends Controller
 {
     public function index($categoryId)
     {
-        $category = Category::with('attributes.options')->findOrFail($categoryId);
-        return response()->json($category->attributes);
+        return response()->json(
+            MasterDataCache::remember("category_attributes.{$categoryId}", function () use ($categoryId) {
+                $category = Category::with('attributes.options')->findOrFail($categoryId);
+
+                return $category->attributes->toArray();
+            })
+        );
     }
 
     public function sync(Request $request, $categoryId)
@@ -29,6 +35,7 @@ class CategoryAttributeController extends Controller
         }
 
         $category->attributes()->sync($syncData);
+        MasterDataCache::flush();
 
         return response()->json(['message' => 'Mapping updated']);
     }

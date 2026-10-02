@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Province;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 
 class ProvinceController extends Controller
@@ -22,7 +23,11 @@ class ProvinceController extends Controller
             return response()->json($query->paginate($perPage));
         }
 
-        return response()->json($query->get());
+        if ($request->filled('search')) {
+            return response()->json($query->get());
+        }
+
+        return response()->json(MasterDataCache::remember('provinces.all', fn () => $query->get()->toArray()));
     }
 
     public function store(Request $request)
@@ -32,6 +37,7 @@ class ProvinceController extends Controller
             'code' => 'required|string|unique:provinces',
         ]);
         $province = Province::create($validated);
+        MasterDataCache::flush();
         return response()->json($province, 201);
     }
 
@@ -42,12 +48,14 @@ class ProvinceController extends Controller
             'name' => 'required|string|max:255',
             'code' => 'required|string|unique:provinces,code,'.$province->id,
         ]));
+        MasterDataCache::flush();
         return response()->json($province);
     }
 
     public function destroy($id)
     {
         Province::findOrFail($id)->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Deleted']);
     }
 }

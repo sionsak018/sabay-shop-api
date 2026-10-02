@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BodyType;
+use App\Support\MasterDataCache;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Services\CloudinaryService;
@@ -19,7 +20,9 @@ class BodyTypeController extends Controller
 
     public function index()
     {
-        return response()->json(BodyType::all());
+        return response()->json(
+            MasterDataCache::remember('body_types.all', fn () => BodyType::all()->toArray())
+        );
     }
 
     public function store(Request $request)
@@ -38,6 +41,7 @@ class BodyTypeController extends Controller
         }
 
         $bodyType = BodyType::create($validated);
+        MasterDataCache::flush();
         return response()->json($bodyType, 201);
     }
 
@@ -68,6 +72,7 @@ class BodyTypeController extends Controller
         unset($validated['image']);
         $bodyType->fill($validated);
         $bodyType->save();
+        MasterDataCache::flush();
 
         return response()->json($bodyType);
     }
@@ -76,6 +81,7 @@ class BodyTypeController extends Controller
     {
         $bodyType = BodyType::findOrFail($id);
         $bodyType->delete();
+        MasterDataCache::flush();
         return response()->json(['message' => 'Body type deleted']);
     }
 }

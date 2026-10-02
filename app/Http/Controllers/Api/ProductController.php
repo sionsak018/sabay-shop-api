@@ -26,11 +26,8 @@ class ProductController extends Controller
         $user = auth('sanctum')->user();
         $query = Product::with([
             'seller' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
-            'category',
             'images',
             'province',
-            'commune',
-            'attributeValues.attribute',
         ]);
 
         // Only filter by active if NOT filtering by a specific user/seller
