@@ -53,6 +53,7 @@ RUN { \
 
 # Set permissions
 RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
+21
 
 # Expose port (Render overrides or uses PORT env var)
 EXPOSE 10000

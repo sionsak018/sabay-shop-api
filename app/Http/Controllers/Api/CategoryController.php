@@ -56,6 +56,11 @@ class CategoryController extends Controller
             'image' => 'nullable|image|max:2048',
         ]);
 
+        // Only two levels are allowed: a category's parent must be a main category.
+        if (!empty($validated['parent_id']) && ($error = $this->invalidParentMessage((int) $validated['parent_id']))) {
+            return response()->json(['message' => $error], 422);
+        }
+
         if ($request->hasFile('image')) {
             $url = $this->cloudinaryService->upload($request->file('image'), 'sabay-shop/categories');
             if ($url) {
@@ -89,6 +94,24 @@ class CategoryController extends Controller
             'parent_id' => 'nullable|exists:categories,id',
             'image' => 'nullable|image|max:2048',
         ]);
+
+        // Only two levels are allowed: a category's parent must be a main category,
+        // and a category that already has subcategories cannot itself become one.
+        if (!empty($validated['parent_id'])) {
+            $parentId = (int) $validated['parent_id'];
+
+            if ($parentId === (int) $category->id) {
+                return response()->json(['message' => 'A category cannot be its own parent.'], 422);
+            }
+
+            if ($error = $this->invalidParentMessage($parentId)) {
+                return response()->json(['message' => $error], 422);
+            }
+
+            if ($category->children()->exists()) {
+                return response()->json(['message' => 'This category has subcategories and cannot be moved under another category.'], 422);
+            }
+        }
 
         if ($request->hasFile('image')) {
             if ($category->image_url) {
@@ -151,5 +174,20 @@ class CategoryController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Return an error message when the given parent is itself a subcategory.
+     * Categories are limited to exactly two levels (main + sub).
+     */
+    private function invalidParentMessage(int $parentId): ?string
+    {
+        $parent = Category::find($parentId);
+
+        if ($parent && $parent->parent_id !== null) {
+            return 'A subcategory cannot have subcategories. Please choose a main category as the parent.';
+        }
+
+        return null;
     }
 }
