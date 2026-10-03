@@ -33,6 +33,10 @@ class FavoriteController extends Controller
         $user = $request->user();
         $product = Product::findOrFail($productId);
 
+        if ($product->seller_id === $user->id) {
+            return response()->json(['message' => 'You cannot favorite your own product.'], 403);
+        }
+
         if ($user->favorites()->where('product_id', $productId)->exists()) {
             $user->favorites()->detach($productId);
             $status = 'unfavorited';

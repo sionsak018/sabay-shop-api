@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Review;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,9 @@ class ProfileController extends Controller
                     'avatar' => $user->avatar,
                     'cover_photo' => $user->cover_photo,
                     'about_me' => $user->about_me,
+                    'account_type' => $user->account_type,
+                    'rating_avg' => (float) $user->rating_avg,
+                    'rating_count' => (int) $user->rating_count,
                     'province' => $user->province?->toArray(),
                     'district' => $user->district?->toArray(),
                     'commune' => $user->commune?->toArray(),
@@ -110,7 +114,15 @@ class ProfileController extends Controller
                     'followers_count' => $user->followers()->count(),
                     'following_count' => $user->following()->count(),
                     'ads_count' => $user->products()->where('status', 'active')->count(),
+                    'rating_avg' => (float) $user->rating_avg,
+                    'rating_count' => (int) $user->rating_count,
                 ],
+                'reviews' => Review::with(['reviewer' => fn ($q) => $q->select(User::PUBLIC_COLUMNS)])
+                    ->where('seller_id', $id)
+                    ->latest()
+                    ->limit(5)
+                    ->get()
+                    ->toArray(),
                 'products' => $user->products()
                     ->with(['category', 'images', 'province'])
                     ->where('status', 'active')

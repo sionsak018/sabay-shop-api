@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\HomeController;
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
@@ -19,6 +21,8 @@ Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/sliders', [\App\Http\Controllers\Api\Admin\SliderController::class, 'getActive']);
 Route::get('/profile/{id}', [\App\Http\Controllers\Api\ProfileController::class, 'show']);
+Route::get('/reviews/seller/{userId}', [ReviewController::class, 'seller']);
+Route::get('/stats/public', [HomeController::class, 'stats']);
 Route::get('/category-attributes/{categoryId}', [\App\Http\Controllers\Api\Admin\CategoryAttributeController::class, 'index']);
 Route::get('/brands', [\App\Http\Controllers\Api\Admin\BrandController::class, 'index']);
 Route::get('/brand-models', [\App\Http\Controllers\Api\Admin\BrandModelController::class, 'index']);
@@ -40,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Social & Likes
     Route::get('/favorites', [\App\Http\Controllers\Api\FavoriteController::class, 'index']);
     Route::post('/favorites/{productId}', [\App\Http\Controllers\Api\FavoriteController::class, 'toggle']);
+    Route::post('/reviews', [ReviewController::class, 'store'])->middleware('throttle:reviews');
     Route::post('/follow/{userId}', [\App\Http\Controllers\Api\FollowController::class, 'toggle']);
     Route::get('/followers/{userId}', [\App\Http\Controllers\Api\FollowController::class, 'followers']);
     Route::get('/following/{userId}', [\App\Http\Controllers\Api\FollowController::class, 'following']);
@@ -75,6 +80,7 @@ Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function ()
     Route::apiResource('permissions', \App\Http\Controllers\Api\Admin\PermissionController::class)->middleware('permission:manage_roles');
 
     // Product Management
+    Route::post('products', [\App\Http\Controllers\Api\Admin\AdminProductController::class, 'store'])->middleware('permission:create_products');
     Route::apiResource('products', \App\Http\Controllers\Api\Admin\AdminProductController::class)->only(['index', 'update', 'destroy'])->middleware('permission:view_products');
     Route::apiResource('categories', \App\Http\Controllers\Api\CategoryController::class)->except(['index'])->middleware('permission:manage_categories');
 

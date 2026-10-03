@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\MessageSent;
+use App\Events\MessageUpdated;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use App\Models\Message;
 use App\Models\MessageReaction;
 use App\Models\User;
@@ -18,6 +21,19 @@ class MessageController extends Controller
         $this->cloudinaryService = $cloudinaryService;
     }
 
+    /**
+     * Broadcast an event without letting a transport failure break the
+     * request that triggered it (e.g. Pusher being unreachable).
+     */
+    private function broadcastSafely(callable $dispatch): void
+    {
+        try {
+            $dispatch();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcast failed: '.$e->getMessage());
+        }
+    }
+
     public function index(Request $request)
     {
         // Get all conversations for the logged-in user
@@ -28,6 +44,7 @@ class MessageController extends Controller
                         'toUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
                         'product',
                         'reactions',
+                        'replyTo.fromUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
                     ])
                     ->orderBy('created_at', 'desc')
                     ->get();
@@ -42,7 +59,12 @@ class MessageController extends Controller
             'type' => 'nullable|string|in:text,image,audio,file',
             'file' => 'nullable|file|max:10240', // 10MB limit
             'product_id' => 'nullable|exists:products,id',
+            'reply_to_id' => 'nullable|integer|exists:messages,id',
         ]);
+
+        if ((int) $request->to_user_id === (int) $request->user()->id) {
+            return response()->json(['message' => 'You cannot message yourself.'], 422);
+        }
 
         $type = $request->input('type', 'text');
         $filePath = null;
@@ -62,13 +84,19 @@ class MessageController extends Controller
             'message' => $request->message ?? '',
             'type' => $type,
             'file_path' => $filePath,
+            'reply_to_id' => $request->reply_to_id,
         ]);
 
-        return response()->json($message->load([
+        $message->load([
             'fromUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
             'toUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
             'reactions',
-        ]), 201);
+            'replyTo.fromUser' => fn ($q) => $q->select(User::PUBLIC_COLUMNS),
+        ]);
+
+        $this->broadcastSafely(fn () => MessageSent::dispatch($message));
+
+        return response()->json($message, 201);
     }
 
     public function react(Request $request, $id)
@@ -77,6 +105,8 @@ class MessageController extends Controller
             'emoji' => 'required|string'
         ]);
 
+        $message = Message::findOrFail($id);
+
         $existing = MessageReaction::where('message_id', $id)
             ->where('user_id', $request->user()->id)
             ->where('emoji', $request->emoji)
@@ -84,13 +114,30 @@ class MessageController extends Controller
 
         if ($existing) {
             $existing->delete();
+            $this->broadcastSafely(fn () => MessageUpdated::dispatch(
+                (int) $message->from_user_id,
+                (int) $message->to_user_id,
+                (int) $id,
+                'reaction',
+            ));
             return response()->json(['message' => 'Reaction removed', 'status' => 'removed']);
+        }
+
+        if ($message->from_user_id === $request->user()->id) {
+            return response()->json(['message' => 'You cannot react to your own message.'], 403);
         }
 
         $reaction = MessageReaction::updateOrCreate(
             ['message_id' => $id, 'user_id' => $request->user()->id],
             ['emoji' => $request->emoji]
         );
+
+        $this->broadcastSafely(fn () => MessageUpdated::dispatch(
+            (int) $message->from_user_id,
+            (int) $message->to_user_id,
+            (int) $id,
+            'reaction',
+        ));
 
         return response()->json($reaction);
     }
@@ -104,7 +151,13 @@ class MessageController extends Controller
             $this->cloudinaryService->delete($message->file_path);
         }
 
+        $fromUserId = (int) $message->from_user_id;
+        $toUserId = (int) $message->to_user_id;
+
         $message->delete();
+
+        $this->broadcastSafely(fn () => MessageUpdated::dispatch($fromUserId, $toUserId, (int) $id, 'deleted'));
+
         return response()->json(['message' => 'Message deleted']);
     }
 
@@ -112,6 +165,14 @@ class MessageController extends Controller
     {
         $message = Message::where('to_user_id', $request->user()->id)->findOrFail($id);
         $message->update(['is_read' => true]);
+
+        $this->broadcastSafely(fn () => MessageUpdated::dispatch(
+            (int) $message->from_user_id,
+            (int) $message->to_user_id,
+            (int) $id,
+            'read',
+        ));
+
         return response()->json(['message' => 'Marked as read']);
     }
 }

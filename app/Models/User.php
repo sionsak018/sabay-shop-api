@@ -46,6 +46,8 @@ class User extends Authenticatable
         'about_me',
         'role',
         'account_type',
+        'rating_avg',
+        'rating_count',
         'created_at',
     ];
 
@@ -81,6 +83,12 @@ class User extends Authenticatable
             foreach ($user->products as $product) {
                 $product->delete();
             }
+
+            // Reviews this user wrote are removed with the account; deleting them
+            // one by one fires the observer so each seller's rating stays accurate.
+            foreach ($user->reviewsWritten as $review) {
+                $review->delete();
+            }
         });
     }
 
@@ -89,6 +97,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'rating_avg' => 'float',
+            'rating_count' => 'integer',
         ];
     }
 
@@ -108,6 +118,15 @@ class User extends Authenticatable
             return $this->roles->contains('name', $role);
         }
         return !! $role->intersect($this->roles)->count();
+    }
+
+    /**
+     * Whether this account belongs to the admin console (the admin role or any
+     * custom role). Such accounts post products through the admin console.
+     */
+    public function isConsoleUser(): bool
+    {
+        return $this->role === 'admin' || $this->roles()->count() > 0;
     }
 
     public function hasPermission($permission)
@@ -143,6 +162,31 @@ class User extends Authenticatable
     public function favorites()
     {
         return $this->belongsToMany(Product::class, 'favorites');
+    }
+
+    public function reviewsReceived()
+    {
+        return $this->hasMany(Review::class, 'seller_id');
+    }
+
+    public function reviewsWritten()
+    {
+        return $this->hasMany(Review::class, 'reviewer_id');
+    }
+
+    /**
+     * Recompute the cached rating aggregate from the seller's reviews.
+     */
+    public function refreshRating(): void
+    {
+        $stats = $this->reviewsReceived()
+            ->selectRaw('COALESCE(AVG(rating), 0) as average, COUNT(*) as total')
+            ->first();
+
+        $this->forceFill([
+            'rating_avg' => round((float) ($stats->average ?? 0), 2),
+            'rating_count' => (int) ($stats->total ?? 0),
+        ])->saveQuietly();
     }
 
     public function followers()

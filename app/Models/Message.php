@@ -14,6 +14,7 @@ class Message extends Model
         'type',
         'file_path',
         'is_read',
+        'reply_to_id',
     ];
 
     protected static function boot()
@@ -43,5 +44,10 @@ class Message extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function replyTo()
+    {
+        return $this->belongsTo(Message::class, 'reply_to_id');
     }
 }

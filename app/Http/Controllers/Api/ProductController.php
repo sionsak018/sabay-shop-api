@@ -177,6 +177,14 @@ class ProductController extends Controller
     {
         $user = $request->user();
 
+        // Admin console accounts must post through POST /admin/products so ads
+        // always have a clear owner and are not mixed into the public flow.
+        if ($user->isConsoleUser()) {
+            return response()->json([
+                'message' => 'Administrators must post from the admin console.',
+            ], 403);
+        }
+
         // Count active products
         $activeCount = $user->products()->where('status', 'active')->count();
 
