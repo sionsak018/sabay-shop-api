@@ -121,6 +121,7 @@ class AdminProductController extends Controller
         }
 
         Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
         Product::flushListingsCache();
 
         return response()->json($product->load('images'), 201);
@@ -131,6 +132,7 @@ class AdminProductController extends Controller
         $product = Product::findOrFail($id);
         $product->update($request->all());
         Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
         Product::flushListingsCache();
         return response()->json($product);
     }
@@ -140,6 +142,7 @@ class AdminProductController extends Controller
         $product = Product::findOrFail($id);
         $product->delete();
         Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
         Product::flushListingsCache();
         return response()->json(['message' => 'Product deleted by admin']);
     }

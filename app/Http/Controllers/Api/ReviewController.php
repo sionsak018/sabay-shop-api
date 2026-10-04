@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\Review;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ReviewController extends Controller
 {
@@ -29,33 +32,54 @@ class ReviewController extends Controller
     }
 
     /**
-     * Create or update the authenticated user's review for a seller.
+     * Create the authenticated user's single review for a purchased product.
      */
     public function store(Request $request)
     {
         $me = $request->user();
 
         $validated = $request->validate([
-            'seller_id' => 'required|integer|exists:users,id',
-            'product_id' => 'nullable|integer|exists:products,id',
+            'product_id' => 'required|integer|exists:products,id',
             'rating' => 'required|integer|min:1|max:5',
-            'comment' => 'nullable|string|max:1000',
+            'comment' => 'required|string|min:10|max:1000',
         ]);
 
-        if ((int) $validated['seller_id'] === $me->id) {
-            return response()->json(['message' => 'You cannot review yourself.'], 422);
+        $product = Product::findOrFail($validated['product_id']);
+
+        if ((int) $product->seller_id === $me->id) {
+            return response()->json(['message' => 'You cannot review your own product.'], 422);
         }
 
-        $review = Review::updateOrCreate(
-            ['reviewer_id' => $me->id, 'seller_id' => $validated['seller_id']],
-            [
-                'product_id' => $validated['product_id'] ?? null,
-                'rating' => $validated['rating'],
-                'comment' => $validated['comment'] ?? null,
-            ]
-        );
+        $hasPurchased = OrderItem::where('product_id', $product->id)
+            ->whereHas('order', fn ($query) => $query->where('buyer_id', $me->id))
+            ->exists();
 
-        $seller = User::findOrFail($validated['seller_id']);
+        if (! $hasPurchased) {
+            return response()->json(['message' => 'You can only review a product you have purchased.'], 422);
+        }
+
+        $alreadyReviewed = Review::where('reviewer_id', $me->id)
+            ->where('product_id', $product->id)
+            ->exists();
+
+        if ($alreadyReviewed) {
+            return response()->json(['message' => 'You have already reviewed this product.'], 422);
+        }
+
+        $review = Review::create([
+            'reviewer_id' => $me->id,
+            'seller_id' => $product->seller_id,
+            'product_id' => $product->id,
+            'rating' => $validated['rating'],
+            'comment' => $validated['comment'],
+        ]);
+
+        $seller = $product->seller;
+
+        Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
+        Product::flushSellerCache($product->seller_id);
+        Product::flushListingsCache();
 
         return response()->json([
             'message' => 'Review submitted.',

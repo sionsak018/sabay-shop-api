@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\HomeController;
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/auth/google', [AuthController::class, 'google']);
 
 // Public product browsing
 Route::get('/products', [ProductController::class, 'index']);

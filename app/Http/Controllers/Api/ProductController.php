@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
 use App\Models\Category;
+use App\Models\OrderItem;
+use App\Models\Review;
 use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -284,6 +286,7 @@ class ProductController extends Controller
         }
 
         Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
         Product::flushListingsCache();
         return response()->json($product->load('images'), 201);
     }
@@ -400,6 +403,7 @@ class ProductController extends Controller
         }
 
         Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
         Product::flushListingsCache();
         return response()->json($product->load(['seller', 'category', 'images', 'province', 'commune', 'attributeValues.attribute']));
     }
@@ -440,6 +444,19 @@ class ProductController extends Controller
 
         if ($user) {
             $product['is_favorited'] = $user->favorites()->where('product_id', $id)->exists();
+
+            $myReview = Review::where('reviewer_id', $user->id)
+                ->where('product_id', $id)
+                ->first();
+
+            $hasPurchased = OrderItem::where('product_id', $id)
+                ->whereHas('order', fn ($query) => $query->where('buyer_id', $user->id))
+                ->exists();
+
+            $product['my_review'] = $myReview;
+            $product['can_review'] = $hasPurchased
+                && ! $myReview
+                && (int) $product['seller_id'] !== $user->id;
         }
 
         return response()->json($product);
@@ -463,6 +480,7 @@ class ProductController extends Controller
     {
         $product = $request->user()->products()->findOrFail($id);
         Cache::forget("product.{$product->id}");
+        Cache::forget("profile.show.{$product->seller_id}");
         Product::flushListingsCache();
         // The deleting hook in Product model handles image deletion from DB and Cloudinary
         $product->delete();

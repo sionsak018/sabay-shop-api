@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Category;
+use App\Support\MasterDataCache;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
 
@@ -166,5 +168,8 @@ class CategorySeeder extends Seeder
                 }
             }
         }
+
+        Cache::forget('categories.all');
+        MasterDataCache::flush();
     }
 }

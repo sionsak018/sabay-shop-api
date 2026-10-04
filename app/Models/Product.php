@@ -20,6 +20,19 @@ class Product extends Model
         \Illuminate\Support\Facades\Cache::forever(self::LISTINGS_CACHE_VERSION_KEY, now()->getTimestamp());
     }
 
+    /**
+     * Invalidate the cached detail payload of every product owned by a seller.
+     * The detail cache embeds the seller's public data (name, avatar, about,
+     * rating), so profile edits and new reviews must clear it too.
+     */
+    public static function flushSellerCache(int $sellerId): void
+    {
+        $ids = static::where('seller_id', $sellerId)->pluck('id')->all();
+        foreach ($ids as $id) {
+            \Illuminate\Support\Facades\Cache::forget("product.{$id}");
+        }
+    }
+
     protected $fillable = [
         'seller_id',
         'category_id',

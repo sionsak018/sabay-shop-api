@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Review;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +82,7 @@ class ProfileController extends Controller
 
         $user->update($validated);
         Cache::forget("profile.show.{$user->id}");
+        Product::flushSellerCache($user->id);
 
         return response()->json($user->load(['province', 'district', 'commune', 'village']));
     }
