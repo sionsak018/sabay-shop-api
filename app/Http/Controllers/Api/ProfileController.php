@@ -34,16 +34,24 @@ class ProfileController extends Controller
             'district_id' => 'sometimes|nullable|exists:districts,id',
             'commune_id' => 'sometimes|nullable|exists:communes,id',
             'village_id' => 'sometimes|nullable|exists:villages,id',
-            'current_password' => 'sometimes|required_with:password|current_password',
+            // Google-only customers are passwordless by design: they sign in with Google
+            // and never set one, so accepting a password here would create a
+            // second, weaker way into the account.
             'password' => 'sometimes|nullable|string|min:8|confirmed',
         ]);
 
         if ($request->has('password') && $request->password != null) {
+            if (empty($user->password)) {
+                return response()->json([
+                    'message' => 'This account signs in with Google and does not use a password.',
+                    'errors' => ['password' => ['This account signs in with Google and does not use a password.']],
+                ], 422);
+            }
+
             $validated['password'] = \Illuminate\Support\Facades\Hash::make($request->password);
         } else {
             unset($validated['password']);
         }
-        unset($validated['current_password']);
         unset($validated['password_confirmation']);
 
         if ($request->has('remove_avatar') && $request->remove_avatar == '1') {

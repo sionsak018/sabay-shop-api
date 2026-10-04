@@ -10,32 +10,21 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use App\Http\Requests\Api\LoginRequest;
-use App\Http\Requests\Api\RegisterRequest;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request)
-{
-    $user = User::create([
-        'name' => $request->name,
-        'email' => $request->email,
-        'password' => Hash::make($request->password),
-        'phone' => $request->phone,
-    ]);
-
-    $token = $user->createToken('auth_token')->plainTextToken;
-
-    return response()->json([
-        'user' => $user->load('roles.permissions'),
-        'token' => $token
-    ], 201);
-}
-
 public function login(LoginRequest $request)
 {
-    $user = User::where('email', $request->email)->first();
+    // The "email" field doubles as the login identifier: phone or email.
+    $login = $request->email;
+    $digits = preg_replace('/\D/', '', $login);
 
-    if (!$user || !Hash::check($request->password, $user->password)) {
+    $user = User::where('email', $login)
+        ->orWhere('phone', $login)
+        ->orWhere('phone', $digits)
+        ->first();
+
+    if (!$user || empty($user->password) || !Hash::check($request->password, $user->password)) {
         return response()->json(['message' => 'Invalid credentials'], 401);
     }
 
@@ -58,6 +47,9 @@ public function google(Request $request)
 {
     $request->validate([
         'credential' => ['required', 'string'],
+        // Only sent by password recovery: the Google identity that comes back
+        // must be the account the customer actually looked up.
+        'login' => ['sometimes', 'nullable', 'string', 'max:255'],
     ]);
 
     $payload = $this->verifyGoogleToken($request->input('credential'));
@@ -71,6 +63,12 @@ public function google(Request $request)
 
     if (!$googleId || !$email) {
         return response()->json(['message' => 'Google account is missing required profile data'], 422);
+    }
+
+    $expected = trim((string) $request->input('login', ''));
+
+    if ($expected !== '') {
+        return $this->recoverGoogleAccount($expected, $googleId, $email);
     }
 
     $user = User::where('google_id', $googleId)
@@ -101,7 +99,8 @@ public function google(Request $request)
             'name' => $payload['name'] ?? Str::before($email, '@'),
             'email' => $email,
             'google_id' => $googleId,
-            'password' => Hash::make(Str::random(40)),
+            // Google customers are passwordless: Google is their only way in.
+            'password' => null,
             'avatar' => $payload['picture'] ?? null,
         ]);
 
@@ -113,6 +112,45 @@ public function google(Request $request)
     return response()->json([
         'user' => $user->load('roles.permissions'),
         'token' => $token
+    ]);
+}
+
+/**
+ * Password recovery for a Google account.
+ *
+ * Google's account chooser lets the customer pick *any* of their accounts, so
+ * the credential is only accepted when its verified email matches the account
+ * they asked to recover. Recovery also never creates accounts: it can only
+ * return the session of an account that already exists.
+ */
+protected function recoverGoogleAccount(string $expected, string $googleId, string $email)
+{
+    $digits = preg_replace('/\D/', '', $expected);
+
+    $user = User::where('email', $expected)->orWhere('phone', $expected)->first();
+
+    if (!$user && $digits !== '') {
+        $user = User::where('phone', $digits)->first();
+    }
+
+    if (!$user) {
+        return response()->json(['message' => "No account found for {$expected}."], 404);
+    }
+
+    if (strcasecmp((string) $email, (string) $user->email) !== 0) {
+        return response()->json([
+            'message' => "You are signed in as {$email}, which is not {$expected}. Please choose the matching Google account.",
+        ], 422);
+    }
+
+    if (empty($user->google_id)) {
+        $user->google_id = $googleId;
+        $user->save();
+    }
+
+    return response()->json([
+        'user' => $user->load('roles.permissions'),
+        'token' => $user->createToken('auth_token')->plainTextToken,
     ]);
 }
 
@@ -221,6 +259,11 @@ public function profile(Request $request)
     $userData['ads_count'] = $user->products()->where('status', 'active')->count();
     $userData['followers_count'] = $user->followers()->count();
     $userData['following_count'] = $user->following()->count();
+
+    // Google-only customers sign in with Google and never hold a password, so
+    // the client uses this to hide the password forms entirely.
+    $userData['has_password'] = !empty($user->password);
+    $userData['auth_provider'] = !empty($user->google_id) && empty($user->password) ? 'google' : 'password';
 
     return response()->json($userData);
 }

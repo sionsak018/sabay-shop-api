@@ -12,9 +12,23 @@ use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\HomeController;
 
 // Public routes
-Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/auth/google', [AuthController::class, 'google']);
+
+// Phone sign-up: step 1 hands out a Telegram link, step 2 confirms the code.
+Route::post('/register/start', [\App\Http\Controllers\Api\RegistrationVerificationController::class, 'start'])
+    ->middleware('throttle:register-start');
+Route::post('/register/verify', [\App\Http\Controllers\Api\RegistrationVerificationController::class, 'verify'])
+    ->middleware('throttle:register-start');
+
+// Forgot password: Google accounts verify with Google, phone accounts with a Telegram code.
+Route::post('/password/forgot', [\App\Http\Controllers\Api\PasswordResetController::class, 'forgot'])
+    ->middleware('throttle:password-reset');
+Route::post('/password/reset', [\App\Http\Controllers\Api\PasswordResetController::class, 'reset'])
+    ->middleware('throttle:password-reset');
+
+// Telegram bot webhook (register with `php artisan telegram:set-webhook`).
+Route::post('/telegram/webhook', [\App\Http\Controllers\Api\TelegramWebhookController::class, 'webhook']);
 
 // Public product browsing
 Route::get('/products', [ProductController::class, 'index']);
@@ -41,6 +55,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/profile', [AuthController::class, 'profile']);
     Route::post('/profile', [\App\Http\Controllers\Api\ProfileController::class, 'update']); // Use POST for multipart support
     Route::get('/user-stats/{id}', [\App\Http\Controllers\Api\ProfileController::class, 'stats']);
+
+    // Telegram account linking (free channel for verification codes).
+    Route::get('/telegram/status', [\App\Http\Controllers\Api\TelegramController::class, 'status']);
+    Route::post('/telegram/link', [\App\Http\Controllers\Api\TelegramController::class, 'link']);
+    Route::delete('/telegram/link', [\App\Http\Controllers\Api\TelegramController::class, 'unlink']);
 
     // Social & Likes
     Route::get('/favorites', [\App\Http\Controllers\Api\FavoriteController::class, 'index']);

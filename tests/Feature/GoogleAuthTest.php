@@ -182,4 +182,58 @@ class GoogleAuthTest extends TestCase
             ->assertStatus(401);
     }
 
+    public function test_recovery_refuses_a_different_google_account(): void
+    {
+        $target = $this->googleCustomer('kimsoky9@gmail.com', 'google-id-1');
+
+        $this->fakeGoogleToken([
+            'sub' => 'google-id-2',
+            'email' => 'sionsak018@gmail.com',
+        ]);
+
+        $this->postJson('/api/auth/google', [
+            'credential' => 'chosen-token',
+            'login' => 'kimsoky9@gmail.com',
+        ])->assertStatus(422);
+
+        // The chosen identity must not have been signed in, linked or created.
+        $this->assertDatabaseMissing('users', ['email' => 'sionsak018@gmail.com']);
+        $this->assertNull($target->fresh()->password);
+    }
+
+    public function test_recovery_signs_in_when_the_google_account_matches(): void
+    {
+        $target = $this->googleCustomer('kimsoky9@gmail.com', 'google-id-1');
+
+        $this->fakeGoogleToken(['sub' => 'google-id-1', 'email' => 'kimsoky9@gmail.com']);
+
+        $this->postJson('/api/auth/google', [
+            'credential' => 'chosen-token',
+            'login' => 'kimsoky9@gmail.com',
+        ])->assertOk()
+            ->assertJsonPath('user.id', $target->id)
+            ->assertJsonStructure(['token']);
+    }
+
+    public function test_recovery_never_creates_an_account(): void
+    {
+        $this->fakeGoogleToken(['email' => 'brand-new@example.com']);
+
+        $this->postJson('/api/auth/google', [
+            'credential' => 'chosen-token',
+            'login' => 'nobody@example.com',
+        ])->assertStatus(404);
+
+        $this->assertDatabaseMissing('users', ['email' => 'brand-new@example.com']);
+    }
+
+    private function googleCustomer(string $email, string $googleId): User
+    {
+        return User::create([
+            'name' => 'Google Customer',
+            'email' => $email,
+            'google_id' => $googleId,
+            'password' => null,
+        ]);
+    }
 }

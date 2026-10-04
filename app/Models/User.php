@@ -15,6 +15,8 @@ class User extends Authenticatable
         'name',
         'email',
         'google_id',
+        'telegram_chat_id',
+        'telegram_username',
         'password',
         'phone',
         'avatar',
@@ -33,6 +35,8 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'google_id',
+        'telegram_chat_id',
+        'telegram_username',
     ];
 
     /**

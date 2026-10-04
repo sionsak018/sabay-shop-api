@@ -23,8 +23,16 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => 'required|string|email',
+            // Accepts a phone number or an email address.
+            'email' => 'required|string',
             'password' => 'required|string|min:6',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('email'))) {
+            $this->merge(['email' => trim($this->input('email'))]);
+        }
     }
 }
