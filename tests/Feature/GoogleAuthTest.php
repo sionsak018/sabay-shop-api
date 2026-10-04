@@ -99,6 +99,46 @@ class GoogleAuthTest extends TestCase
             ->assertJsonPath('user.id', $user->id);
     }
 
+    public function test_profile_name_and_picture_come_from_id_token_claims(): void
+    {
+        $credential = $this->fakeJwt([
+            'sub' => 'google-claims-1',
+            'email' => 'claims@example.com',
+            'email_verified' => true,
+            'name' => 'Real Google Name',
+            'picture' => 'https://lh3.googleusercontent.com/a/real',
+        ]);
+
+        // tokeninfo validates the token but omits name/picture, as it often does.
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'iss' => 'https://accounts.google.com',
+                'aud' => 'test-google-client',
+                'sub' => 'google-claims-1',
+                'email' => 'claims@example.com',
+                'email_verified' => 'true',
+                'exp' => time() + 3600,
+            ]),
+        ]);
+
+        $this->postJson('/api/auth/google', ['credential' => $credential])->assertOk();
+
+        $user = User::where('email', 'claims@example.com')->first();
+
+        $this->assertNotNull($user);
+        $this->assertSame('Real Google Name', $user->name);
+        $this->assertSame('https://lh3.googleusercontent.com/a/real', $user->avatar);
+    }
+
+    private function fakeJwt(array $claims): string
+    {
+        $encode = fn (array $data) => rtrim(strtr(base64_encode(json_encode($data)), '+/', '-_'), '=');
+
+        return $encode(['alg' => 'RS256', 'typ' => 'JWT'])
+            .'.'.$encode($claims)
+            .'.'.$encode(['sig' => 'x']);
+    }
+
     public function test_google_rejects_when_credential_missing(): void
     {
         $this->postJson('/api/auth/google', [])

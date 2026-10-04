@@ -89,6 +89,12 @@ public function google(Request $request)
         if (empty($user->avatar) && !empty($payload['picture'])) {
             $user->avatar = $payload['picture'];
         }
+        // Repair the email-prefix fallback name from an earlier Google sign-up
+        // without clobbering a name the user has chosen.
+        if (!empty($payload['name'])
+            && (!$user->name || $user->name === Str::before($user->email, '@'))) {
+            $user->name = $payload['name'];
+        }
         $user->save();
     } else {
         $user = User::create([
@@ -160,8 +166,44 @@ protected function verifyGoogleToken(string $credential): ?array
             return null;
         }
 
-        return $data;
+        // tokeninfo verifies the signature but frequently omits the profile
+        // claims (name, picture) even when the profile scope was granted. Those
+        // claims are still inside the signed ID token, so decode its payload
+        // and merge them in. tokeninfo values win on overlap.
+        $claims = $this->decodeJwtPayload($credential);
+
+        return array_merge($claims, $data);
     });
+}
+
+/**
+ * Decode the payload of a JWT without verifying it. Only used after the token
+ * has already been validated by Google's tokeninfo endpoint.
+ */
+protected function decodeJwtPayload(string $jwt): array
+{
+    $parts = explode('.', $jwt);
+
+    if (count($parts) !== 3) {
+        return [];
+    }
+
+    $payload = strtr($parts[1], '-_', '+/');
+    $remainder = strlen($payload) % 4;
+
+    if ($remainder) {
+        $payload .= str_repeat('=', 4 - $remainder);
+    }
+
+    $decoded = base64_decode($payload, true);
+
+    if ($decoded === false) {
+        return [];
+    }
+
+    $claims = json_decode($decoded, true);
+
+    return is_array($claims) ? $claims : [];
 }
 
 public function logout(Request $request)
