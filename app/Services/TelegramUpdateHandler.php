@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class TelegramUpdateHandler
@@ -33,6 +34,20 @@ class TelegramUpdateHandler
         }
 
         $chatId = (string) $chatId;
+        $chatType = (string) ($message['chat']['type'] ?? '');
+
+        // Never act on group or channel messages: the code would be posted where
+        // everyone can read it. Checked before the token is consumed so a group
+        // message cannot even burn somebody's single-use link.
+        if ($chatType !== 'private') {
+            Log::notice('Ignored a Telegram update from a non-private chat.', [
+                'chat_id' => $chatId,
+                'chat_type' => $chatType,
+            ]);
+
+            return;
+        }
+
         $text = trim((string) ($message['text'] ?? ''));
 
         if (!str_starts_with($text, '/start')) {
@@ -83,10 +98,16 @@ class TelegramUpdateHandler
 
         $this->telegram->sendMessage(
             $chatId,
-            "Welcome to SABAY SHOP! Your verification code is {$code}. It expires in 10 minutes."
+            "Welcome to SABAY SHOP! Your verification code is {$code}. It expires in "
+                . PhoneVerificationService::TTL_MINUTES . ' minutes.'
         );
     }
 
+    /**
+     * Codes are only ever handed to the Telegram that was linked while the customer
+     * was signed in. A recovery link pressed from any other chat is refused, so
+     * knowing a phone number is not enough to take over the account.
+     */
     protected function handleRecovery(string $chatId, array $message, int $userId): void
     {
         $user = User::find($userId);
@@ -97,15 +118,39 @@ class TelegramUpdateHandler
             return;
         }
 
-        if (empty($user->telegram_chat_id)) {
-            $this->linkChat($user, $chatId, $message);
+        $linked = (string) ($user->telegram_chat_id ?? '');
+
+        if ($linked === '') {
+            $this->telegram->sendMessage(
+                $chatId,
+                'This account has no Telegram connected, so we cannot send a code here. '
+                    .'Sign in to SABAY SHOP and connect Telegram under your profile, or contact support.'
+            );
+
+            return;
+        }
+
+        if ($linked !== $chatId) {
+            Log::notice('Refused a recovery code for a Telegram that is not linked to the account.', [
+                'user_id' => $user->id,
+                'requested_chat_id' => $chatId,
+            ]);
+
+            $this->telegram->sendMessage(
+                $chatId,
+                'This account is already connected to a different Telegram, so no code was sent here. '
+                    .'Please use the original Telegram, or contact support.'
+            );
+
+            return;
         }
 
         $code = $this->otp->generate($user);
 
         $this->telegram->sendMessage(
             $chatId,
-            "Your SABAY SHOP verification code is {$code}. It expires in 10 minutes."
+            "Your SABAY SHOP verification code is {$code}. It expires in "
+                . PasswordOtpService::TTL_MINUTES . ' minutes.'
         );
     }
 

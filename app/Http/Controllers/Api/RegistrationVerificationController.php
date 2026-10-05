@@ -44,17 +44,18 @@ class RegistrationVerificationController extends Controller
             return $this->invalidPhone('That phone number is already registered.');
         }
 
-        $token = $this->verification->begin([
+        $pending = $this->verification->begin([
             'name' => trim($data['name']),
             'phone' => $phone,
             'password' => $data['password'],
         ]);
 
-        $this->telegram->rememberLink($token, ['type' => 'signup']);
+        $this->telegram->rememberLink($pending['token'], ['type' => 'signup']);
 
         return response()->json([
             'method' => 'telegram_link',
-            'link' => $this->telegram->deepLink($token),
+            'link' => $this->telegram->deepLink($pending['token']),
+            'verify_token' => $pending['verify_token'],
             'bot_username' => config('services.telegram.bot_username'),
             'phone' => $this->maskPhone($phone),
             'expires_in' => PhoneVerificationService::LINK_TTL_MINUTES * 60,
@@ -70,9 +71,10 @@ class RegistrationVerificationController extends Controller
         $data = $request->validate([
             'phone' => 'required|string',
             'otp' => 'required|string',
+            'verify_token' => 'required|string',
         ]);
 
-        $result = $this->verification->attempt($data['phone'], $data['otp']);
+        $result = $this->verification->attempt($data['phone'], $data['otp'], $data['verify_token']);
 
         if (!$result['ok']) {
             $status = !empty($result['locked']) ? 429 : 422;

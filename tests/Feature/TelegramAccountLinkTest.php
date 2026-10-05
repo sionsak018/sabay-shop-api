@@ -66,7 +66,7 @@ class TelegramAccountLinkTest extends TestCase
         $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'secret-123')
             ->postJson('/api/telegram/webhook', [
                 'message' => [
-                    'chat' => ['id' => 424242],
+                    'chat' => ['id' => 424242, 'type' => 'private'],
                     'from' => ['username' => 'linked_kh'],
                     'text' => '/start ' . $query['start'],
                 ],
@@ -114,6 +114,45 @@ class TelegramAccountLinkTest extends TestCase
             ->postJson('/api/telegram/webhook', [
                 'message' => ['chat' => ['id' => 1], 'text' => 'hello'],
             ])->assertOk();
+    }
+
+    /**
+     * A chat type we do not trust must be dropped before the token is consumed,
+     * otherwise a group could burn somebody's single-use link.
+     */
+    public function test_webhook_ignores_group_chats_without_consuming_the_token(): void
+    {
+        $user = User::factory()->create(['telegram_chat_id' => null]);
+        $token = $user->createToken('test')->plainTextToken;
+
+        $link = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/telegram/link')->json('link');
+
+        parse_str((string) parse_url((string) $link, PHP_URL_QUERY), $query);
+
+        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'secret-123')
+            ->postJson('/api/telegram/webhook', [
+                'message' => [
+                    'chat' => ['id' => -100999, 'type' => 'supergroup', 'title' => 'Group'],
+                    'from' => ['username' => 'someone'],
+                    'text' => '/start ' . $query['start'],
+                ],
+            ])->assertOk();
+
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'sendMessage'));
+        $this->assertNull($user->fresh()->telegram_chat_id);
+
+        // Still usable from a private chat.
+        $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'secret-123')
+            ->postJson('/api/telegram/webhook', [
+                'message' => [
+                    'chat' => ['id' => 424242, 'type' => 'private'],
+                    'from' => ['username' => 'linked_kh'],
+                    'text' => '/start ' . $query['start'],
+                ],
+            ])->assertOk();
+
+        $this->assertSame('424242', $user->fresh()->telegram_chat_id);
     }
 
     public function test_telegram_endpoints_require_authentication(): void

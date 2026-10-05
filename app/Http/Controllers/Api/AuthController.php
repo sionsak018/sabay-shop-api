@@ -31,7 +31,7 @@ public function login(LoginRequest $request)
     $token = $user->createToken('auth_token')->plainTextToken;
 
     return response()->json([
-        'user' => $user->load('roles.permissions'),
+        'user' => $this->authUser($user),
         'token' => $token
     ]);
 }
@@ -110,7 +110,7 @@ public function google(Request $request)
     $token = $user->createToken('auth_token')->plainTextToken;
 
     return response()->json([
-        'user' => $user->load('roles.permissions'),
+        'user' => $this->authUser($user),
         'token' => $token
     ]);
 }
@@ -149,8 +149,25 @@ protected function recoverGoogleAccount(string $expected, string $googleId, stri
     }
 
     return response()->json([
-        'user' => $user->load('roles.permissions'),
+        'user' => $this->authUser($user),
         'token' => $user->createToken('auth_token')->plainTextToken,
+    ]);
+}
+
+/**
+ * Shape a user for an authentication response.
+ *
+ * Password-only customers keep the password forms; Google-only customers (no
+ * password on file) get has_password=false so the client hides them straight
+ * away, instead of only after a separate /profile call.
+ */
+protected function authUser(User $user): array
+{
+    $user->loadMissing('roles.permissions');
+
+    return array_merge($user->toArray(), [
+        'has_password' => !empty($user->password),
+        'auth_provider' => !empty($user->google_id) && empty($user->password) ? 'google' : 'password',
     ]);
 }
 

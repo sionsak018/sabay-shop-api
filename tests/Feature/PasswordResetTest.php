@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Services\PasswordOtpService;
+use App\Services\TelegramService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Cache;
@@ -43,6 +44,11 @@ class PasswordResetTest extends TestCase
     /**
      * Grab the 6-digit code the bot sent to Telegram.
      */
+    private ?string $resetToken = null;
+
+    /**
+     * Grab the 6-digit code the bot sent to Telegram.
+     */
     private function sentCode(): ?string
     {
         $code = null;
@@ -57,6 +63,28 @@ class PasswordResetTest extends TestCase
         });
 
         return $code;
+    }
+
+    /**
+     * Start a reset and keep the reset_token the API handed back.
+     */
+    private function forgot(string $login = '012345678')
+    {
+        $response = $this->postJson('/api/password/forgot', ['login' => $login]);
+        $this->resetToken = $response->json('reset_token');
+
+        return $response;
+    }
+
+    private function reset(array $overrides = []): \Illuminate\Testing\TestResponse
+    {
+        return $this->postJson('/api/password/reset', array_merge([
+            'login' => '012345678',
+            'otp' => '000000',
+            'reset_token' => $this->resetToken,
+            'password' => 'brand-new-pass',
+            'password_confirmation' => 'brand-new-pass',
+        ], $overrides));
     }
 
     public function test_google_account_is_told_to_verify_with_google(): void
@@ -83,28 +111,67 @@ class PasswordResetTest extends TestCase
         $this->assertNotNull(Cache::get((new PasswordOtpService())->key($user)));
     }
 
-    public function test_unlinked_account_gets_a_deep_link_that_links_and_sends_the_code(): void
+    /**
+     * With no Telegram linked there is nothing that proves the requester owns this
+     * phone number, so no link is issued at all. Otherwise anybody holding the
+     * number could link their own Telegram and reset the password.
+     */
+    public function test_unlinked_account_is_refused_a_recovery_link(): void
     {
         $user = $this->user();
 
-        $link = $this->postJson('/api/password/forgot', ['login' => '012345678'])
-            ->assertOk()
-            ->assertJson(['method' => 'telegram_link'])
-            ->json('link');
+        $this->forgot()
+            ->assertStatus(422)
+            ->assertJson(['method' => 'telegram_not_linked']);
 
-        parse_str((string) parse_url($link, PHP_URL_QUERY), $query);
+        $response = $this->postJson('/api/password/forgot', ['login' => '012345678']);
+
+        $this->assertNull($response->json('link'));
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'sendMessage'));
+        $this->assertNull($user->fresh()->telegram_chat_id);
+        $this->assertNull(Cache::get((new PasswordOtpService())->key($user)));
+    }
+
+    /**
+     * A recovery link is only ever honoured from the chat that was linked while
+     * the customer was signed in.
+     */
+    public function test_a_recovery_link_is_refused_from_any_other_chat(): void
+    {
+        $user = $this->user(['telegram_chat_id' => '555001']);
+
+        // A link minted before the account had a Telegram attached.
+        $this->telegramLinkFor($user);
 
         $this->withHeader('X-Telegram-Bot-Api-Secret-Token', 'secret-123')
             ->postJson('/api/telegram/webhook', [
                 'message' => [
-                    'chat' => ['id' => 777888],
-                    'from' => ['username' => 'reset_kh'],
-                    'text' => '/start ' . $query['start'],
+                    'chat' => ['id' => 777888, 'type' => 'private'],
+                    'from' => ['username' => 'attacker'],
+                    'text' => '/start ' . $this->linkToken,
                 ],
             ])->assertOk();
 
-        $this->assertSame('777888', $user->fresh()->telegram_chat_id);
-        $this->assertNotNull($this->sentCode());
+        $this->assertSame('555001', $user->fresh()->telegram_chat_id, 'The linked chat must not change.');
+        $this->assertNull(Cache::get((new PasswordOtpService())->key($user)), 'No OTP may be generated.');
+        // The refusal is sent, but it must not contain a usable code.
+        $this->assertNull($this->sentCode(), 'No 6-digit code may be sent to the wrong chat.');
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'sendMessage')
+            && ($request['chat_id'] ?? null) === '777888'
+            && !preg_match('/\b\d{6}\b/', (string) ($request['text'] ?? '')));
+    }
+
+    private string $linkToken = '';
+
+    private function telegramLinkFor(User $user): string
+    {
+        $this->linkToken = (new PasswordOtpService())->newToken();
+        app(TelegramService::class)->rememberLink($this->linkToken, [
+            'type' => 'recovery',
+            'user_id' => $user->id,
+        ]);
+
+        return $this->linkToken;
     }
 
     public function test_reset_with_a_valid_code_changes_the_password_and_revokes_tokens(): void
@@ -112,29 +179,54 @@ class PasswordResetTest extends TestCase
         $user = $this->user(['telegram_chat_id' => '555001']);
         $user->createToken('existing-session');
 
-        $this->postJson('/api/password/forgot', ['login' => '012345678'])->assertOk();
+        $this->forgot()->assertOk();
         $code = $this->sentCode();
 
-        $this->postJson('/api/password/reset', [
-            'login' => '012345678',
-            'otp' => $code,
-            'password' => 'brand-new-pass',
-            'password_confirmation' => 'brand-new-pass',
-        ])->assertOk();
+        $this->reset(['otp' => $code])->assertOk();
 
         $this->assertTrue(Hash::check('brand-new-pass', $user->fresh()->password));
         $this->assertSame(0, $user->tokens()->count());
         $this->assertNull(Cache::get((new PasswordOtpService())->key($user)));
     }
 
+    /**
+     * A leaked code must not be usable from another browser: only the session
+     * that requested the reset holds the matching reset_token.
+     */
+    public function test_a_valid_code_with_the_wrong_reset_token_changes_nothing(): void
+    {
+        $user = $this->user(['telegram_chat_id' => '555001']);
+        $original = $user->password;
+
+        $this->forgot()->assertOk();
+        $code = $this->sentCode();
+
+        $this->reset(['otp' => $code, 'reset_token' => 'somebody-elses-token'])->assertStatus(422);
+
+        $this->assertSame($original, $user->fresh()->password);
+    }
+
+    public function test_reset_requires_the_reset_token(): void
+    {
+        $this->user(['telegram_chat_id' => '555001']);
+        $this->forgot()->assertOk();
+
+        $this->postJson('/api/password/reset', [
+            'login' => '012345678',
+            'otp' => $this->sentCode(),
+            'password' => 'brand-new-pass',
+            'password_confirmation' => 'brand-new-pass',
+        ])->assertStatus(422)->assertJsonValidationErrors('reset_token');
+    }
+
     public function test_reset_works_with_an_email_identifier(): void
     {
         $user = $this->user(['email' => 'reset@example.com', 'telegram_chat_id' => '555001']);
 
-        $this->postJson('/api/password/forgot', ['login' => $user->email])->assertOk();
+        $this->forgot($user->email)->assertOk();
         $code = $this->sentCode();
 
-        $this->postJson('/api/password/reset', [
+        $this->reset([
             'login' => $user->email,
             'otp' => $code,
             'password' => 'email-reset-pass',
@@ -162,50 +254,33 @@ class PasswordResetTest extends TestCase
     public function test_wrong_code_is_rejected(): void
     {
         $user = $this->user(['telegram_chat_id' => '555001']);
-        $this->postJson('/api/password/forgot', ['login' => '012345678'])->assertOk();
+        $this->forgot()->assertOk();
 
-        $this->postJson('/api/password/reset', [
-            'login' => '012345678',
-            'otp' => '000000',
-            'password' => 'brand-new-pass',
-            'password_confirmation' => 'brand-new-pass',
-        ])->assertStatus(422);
+        $this->reset()->assertStatus(422);
 
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
     }
 
     public function test_too_many_wrong_codes_lock_the_reset(): void
     {
-        $user = $this->user(['telegram_chat_id' => '555001']);
-        $this->postJson('/api/password/forgot', ['login' => '012345678'])->assertOk();
+        $this->user(['telegram_chat_id' => '555001']);
+        $this->forgot()->assertOk();
 
         for ($i = 0; $i < 5; $i++) {
-            $this->postJson('/api/password/reset', [
-                'login' => '012345678',
-                'otp' => '000000',
-                'password' => 'brand-new-pass',
-                'password_confirmation' => 'brand-new-pass',
-            ])->assertStatus(422);
+            $this->reset()->assertStatus(422);
         }
 
-        $this->postJson('/api/password/reset', [
-            'login' => '012345678',
-            'otp' => '000000',
-            'password' => 'brand-new-pass',
-            'password_confirmation' => 'brand-new-pass',
-        ])->assertStatus(429);
+        $this->reset()->assertStatus(429);
     }
 
     public function test_reset_requires_matching_confirmation(): void
     {
         $this->user(['telegram_chat_id' => '555001']);
-        $this->postJson('/api/password/forgot', ['login' => '012345678'])->assertOk();
+        $this->forgot()->assertOk();
         $code = $this->sentCode();
 
-        $this->postJson('/api/password/reset', [
-            'login' => '012345678',
+        $this->reset([
             'otp' => $code,
-            'password' => 'brand-new-pass',
             'password_confirmation' => 'different-pass',
         ])->assertStatus(422)->assertJsonValidationErrors('password');
     }

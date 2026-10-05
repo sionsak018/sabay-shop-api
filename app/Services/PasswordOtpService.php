@@ -9,7 +9,8 @@ use Illuminate\Support\Str;
 
 class PasswordOtpService
 {
-    public const TTL_MINUTES = 10;
+    public const TTL_MINUTES = 2;
+    public const INTENT_TTL_MINUTES = 15;
     public const MAX_ATTEMPTS = 5;
 
     /**
@@ -55,5 +56,43 @@ class PasswordOtpService
     public function newToken(): string
     {
         return Str::random(40);
+    }
+
+    /**
+     * Mint the secret that only the browser which started this reset will hold.
+     * Without it, a leaked deep link or code cannot finish the reset.
+     */
+    public function newIntent(User $user): string
+    {
+        $token = Str::random(40);
+
+        Cache::put(
+            $this->intentKey($user),
+            hash('sha256', $token),
+            now()->addMinutes(self::INTENT_TTL_MINUTES)
+        );
+
+        return $token;
+    }
+
+    public function intentMatches(User $user, ?string $token): bool
+    {
+        if (!is_string($token) || $token === '') {
+            return false;
+        }
+
+        $stored = Cache::get($this->intentKey($user));
+
+        return is_string($stored) && hash_equals($stored, hash('sha256', $token));
+    }
+
+    public function forgetIntent(User $user): void
+    {
+        Cache::forget($this->intentKey($user));
+    }
+
+    protected function intentKey(User $user): string
+    {
+        return 'password_intent:user:' . $user->id;
     }
 }
